@@ -18,6 +18,16 @@ import subprocess
 import sys
 from pathlib import Path
 
+# stdout 被重定向成管道时编码会退化为 locale（英文 Windows 是 cp1252），而本文件
+# 满屏都是中文输出，会直接抛 UnicodeEncodeError 崩掉——CI 的 windows runner 就是
+# 这么挂的（ubuntu 上是 UTF-8，所以那边一直正常）。显式改成 UTF-8 并容错。
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (OSError, ValueError):
+            pass
+
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 DICT_DIR = PROJECT_DIR / "dict"
 INJECT_DIR = PROJECT_DIR / "inject"

@@ -12,6 +12,14 @@ import sys
 import time
 from pathlib import Path
 
+# 同 tools/selfcheck.py 里的保护：管道输出时 locale 编码（cp1252）放不下中文。
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (OSError, ValueError):
+            pass
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from scan_filter import is_noise  # noqa: E402
 

@@ -34,11 +34,13 @@ from pathlib import Path
 
 from agasar import Asar, AsarError
 
-# 打包成 exe 或重定向到非 UTF-8 控制台时，中文输出不应让程序崩掉
+# 打包成 exe、或 stdout 被重定向成管道时，编码会退化为 locale（英文 Windows 是
+# cp1252），直接 print 中文会抛 UnicodeEncodeError。显式改成 UTF-8 并容错。
+# （真实控制台下 Python 用 _WindowsConsoleIO 直写 UTF-16，不受代码页影响。）
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
         try:
-            _stream.reconfigure(errors="replace")
+            _stream.reconfigure(encoding="utf-8", errors="replace")
         except (OSError, ValueError):
             pass
 

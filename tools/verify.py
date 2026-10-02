@@ -20,6 +20,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+# 同 tools/selfcheck.py 里的保护：管道输出时 locale 编码（cp1252）放不下中文。
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (OSError, ValueError):
+            pass
+
 TOOLS_DIR = Path(__file__).resolve().parent
 CASES_FILE = TOOLS_DIR / "verify_cases.json"
 DEFAULT_INSTALL = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "antigravity"
