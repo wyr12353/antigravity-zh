@@ -1,0 +1,11 @@
+version: 2
+updates:
+  # 跟进 CI 里用到的 actions 版本（checkout / setup-python / setup-node /
+  # upload-artifact 等）。手工追版本号容易漏，交给 Dependabot 提 PR，
+  # 顺便让 CI 实际验证新版本能否跑通——这比直接改版本号盲升安全。
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "ci"

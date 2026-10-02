@@ -1,0 +1,21 @@
+# 运行产物：由 patcher.py / scan 随时重建，不入库
+# （out/missing.json 与 out/_js_check_data.json 含从客户端 bundle 提取的文案，
+#  既不必要公开，也会平白增加版权摩擦面）
+out/
+
+# Python
+__pycache__/
+*.py[cod]
+*.bak
+
+# PyInstaller 构建产物
+build/
+dist/
+*.spec
+
+# 编辑器与系统文件
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini

@@ -1,0 +1,256 @@
+{
+  "_source": "antigravity-zh 自维护：整句模板规则（运行时拼接的界面文案）",
+  "_format": "[正则, 标志, 译文模板]；模板里 $1 $2 引用捕获组。顺序敏感：具体规则在前，兜底规则在最后。",
+  "template": [
+    [
+      "^Rules: ([\\d,]+) tokens$",
+      "",
+      "规则: $1 个 token"
+    ],
+    [
+      "^(\\d+) active conversations$",
+      "",
+      "$1 个活跃对话"
+    ],
+    [
+      "^Select one of the .+$",
+      "",
+      "请从中选择一个"
+    ],
+    [
+      "^There was an error with your authentication\\. To log in, click (.+)$",
+      "",
+      "您的身份验证出现问题。要登录，请点击 $1"
+    ],
+    [
+      "^Select Environment \\((.+)\\)$",
+      "",
+      "选择环境（$1）"
+    ],
+    [
+      "^Switch to the (.+)$",
+      "",
+      "切换到 $1"
+    ],
+    [
+      "^There are currently no Build with (.+)$",
+      "",
+      "当前没有使用 $1 的 Build"
+    ],
+    [
+      "^This project was created for (.+)$",
+      "",
+      "此项目是为 $1 创建的"
+    ],
+    [
+      "^This will permanently delete (.+)$",
+      "",
+      "这将永久删除 $1"
+    ],
+    [
+      "^Your Plan:\\s*(.*)$",
+      "",
+      "您的套餐: $1"
+    ],
+    [
+      "^Add New Handler to (.+)$",
+      "",
+      "向 $1 添加新处理器"
+    ],
+    [
+      "^Are you sure you want to archive (.+)\\?$",
+      "",
+      "您确定要归档 $1 吗？"
+    ],
+    [
+      "^Are you sure you want to delete '(.+)'\\?$",
+      "",
+      "您确定要删除 '$1' 吗？"
+    ],
+    [
+      "^Are you sure you want to delete (.+)\\?$",
+      "",
+      "您确定要删除 $1 吗？"
+    ],
+    [
+      "^Select model, current: (.+)$",
+      "",
+      "选择模型，当前: $1"
+    ],
+    [
+      "^Select project, current: (.+)$",
+      "",
+      "选择项目，当前: $1"
+    ],
+    [
+      "^Show (\\d+) breakdowns?$",
+      "",
+      "显示 $1 项明细"
+    ],
+    [
+      "^Explored (\\d+) files? >$",
+      "",
+      "已浏览 $1 个文件 >"
+    ],
+    [
+      "^Editing (.+) \\+(\\d+) -(\\d+)$",
+      "",
+      "正在编辑 $1 +$2 -$3"
+    ],
+    [
+      "^Available AI Credits: ([\\d,]+)$",
+      "",
+      "可用 AI 积分: $1"
+    ],
+    [
+      "^Send feedback as (.+)$",
+      "",
+      "以 $1 的身份发送反馈"
+    ],
+    [
+      "^(\\+?\\d+) more lines$",
+      "",
+      "更多 $1 行"
+    ],
+    [
+      "^(\\d+) files? changed$",
+      "",
+      "$1 个文件已修改"
+    ],
+    [
+      "^Last (\\d+) days?$",
+      "i",
+      "最近 $1 天"
+    ],
+    [
+      "^Last (\\d+) hours?$",
+      "i",
+      "最近 $1 小时"
+    ],
+    [
+      "^Last (\\d+) months?$",
+      "i",
+      "最近 $1 个月"
+    ],
+    [
+      "^Version ([\\d.]+(-\\w+)?)$",
+      "",
+      "版本 v$1"
+    ],
+    [
+      "^(\\d+)s$",
+      "",
+      "$1秒前"
+    ],
+    [
+      "^(\\d+)m$",
+      "",
+      "$1分钟前"
+    ],
+    [
+      "^(\\d+)h$",
+      "",
+      "$1小时前"
+    ],
+    [
+      "^(\\d+)d$",
+      "",
+      "$1天前"
+    ],
+    [
+      "^Yes, and always allow '(.+)' in this conversation$",
+      "",
+      "是，在本次对话中始终允许 '$1'"
+    ],
+    [
+      "^Yes, and always allow '(.+)' in this project$",
+      "",
+      "是，在此项目中始终允许 '$1'"
+    ],
+    [
+      "^Yes, and always allow '(.+)' when not in a project$",
+      "",
+      "是，在未分组项目中始终允许 '$1'"
+    ],
+    [
+      "^Yes, and always allow '(.+)' in this workspace$",
+      "",
+      "是，在此工作区中始终允许 '$1'"
+    ],
+    [
+      "^Yes, and always allow '(.+)'$",
+      "",
+      "是，始终允许 '$1'"
+    ],
+    [
+      "^Yes, save rule for '(.+)' in this conversation$",
+      "",
+      "是，为 '$1' 在本次对话中保存规则"
+    ],
+    [
+      "^Yes, save rule for '(.+)' in this project$",
+      "",
+      "是，为 '$1' 在此项目中保存规则"
+    ],
+    [
+      "^Yes, save rule for '(.+)' when not in a project$",
+      "",
+      "是，为 '$1' 在未分组项目中保存规则"
+    ],
+    [
+      "^Yes, save rule for '(.+)' in this workspace$",
+      "",
+      "是，为 '$1' 在此工作区中保存规则"
+    ],
+    [
+      "^Yes, save rule for '(.+)' globally$",
+      "",
+      "是，为 '$1' 全局保存规则"
+    ],
+    [
+      "^Conflicts with your configured Ask permission: (.+)$",
+      "",
+      "与你配置的询问权限冲突：$1"
+    ],
+    [
+      "^Requesting permission to (.+)$",
+      "",
+      "正在请求权限：$1"
+    ],
+    [
+      "^See all \\((\\d+)\\)$",
+      "",
+      "查看全部 ($1)"
+    ],
+    [
+      "^See (\\d+) more$",
+      "",
+      "再显示 $1 条"
+    ],
+    [
+      "^Proceed with implementation plan and (\\d+) comments?$",
+      "",
+      "继续执行实施计划并附带 $1 条评论"
+    ],
+    [
+      "^Show more \\((\\d+)\\)$",
+      "",
+      "显示更多 ($1)"
+    ],
+    [
+      "^Show submitted \\((\\d+)\\)$",
+      "",
+      "显示已提交 ($1)"
+    ],
+    [
+      "^Open (.+) skill$",
+      "",
+      "打开 $1 技能"
+    ],
+    [
+      "^Unnamed skill (\\d+)$",
+      "",
+      "未命名技能 $1"
+    ]
+  ]
+}

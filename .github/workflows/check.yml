@@ -1,0 +1,32 @@
+name: selfcheck
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.9 是 README 声称的最低支持版本（源码里要求最高的 API 是
+        # Path.is_relative_to，3.9 新增），光在文档里声称而不实际跑等于没验证；
+        # 3.11 与 build-exe.yml 的打包环境保持一致。
+        python-version: ["3.9", "3.11"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      # 以下检查都不依赖已安装的 Antigravity 客户端
+      - name: 提交前自检
+        run: python tools/selfcheck.py
+
+      # 138 条翻译用例：Python 模拟层 + 真实 Node 引擎层
+      - name: 词典与规则回归
+        run: python tools/verify.py --from-dict

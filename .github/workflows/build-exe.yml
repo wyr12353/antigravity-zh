@@ -1,0 +1,87 @@
+name: build-exe
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: 提交前自检
+        run: python tools/selfcheck.py
+
+      - name: 安装 PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "pyinstaller>=6.0,<7.0"
+
+      # --noupx：UPX 压缩是杀软误报的重灾区
+      # --add-data：inject/ 与 dict/ 内嵌进单文件，运行时解压到 sys._MEIPASS；
+      #             missing 子命令还会用到 tools/scan_filter.py 的噪声判定
+      - name: 打包单文件 exe
+        run: >
+          pyinstaller -F --noupx --name antigravity-zh
+          --add-data "inject;inject" --add-data "dict;dict"
+          --add-data "tools/scan_filter.py;tools"
+          patcher.py
+
+      # 必须断言退出码与输出：PowerShell 默认不会因外部命令非零退出而让 step 失败，
+      # 否则 exe 缺 DLL 直接崩溃时这里照样"通过"。
+      - name: 冒烟测试
+        shell: pwsh
+        run: |
+          $out = & dist\antigravity-zh.exe --help 2>&1 | Out-String
+          if ($LASTEXITCODE -ne 0) { throw "exe --help 退出码 $LASTEXITCODE" }
+          if ($out -notmatch "patch" -or $out -notmatch "restore") {
+            throw "exe --help 输出异常：$out"
+          }
+
+          # 再断言内嵌资源确实进了 exe。只测 --help 发现不了"词典漏打包"：
+          # 那种 exe 照样能启动、帮助也正常，但汉化会彻底失效。
+          # runner 上没装 Antigravity，status 会因找不到安装目录而失败，所以这里
+          # 直接列出归档内容比对。
+          $list = python -m PyInstaller.utils.cliutils.archive_viewer -l dist\antigravity-zh.exe 2>&1 | Out-String
+          if ($LASTEXITCODE -ne 0) { throw "无法读取 exe 归档：$list" }
+          foreach ($f in @('dict\common.json', 'dict\ui_v2191.json', 'inject\zh_runtime.js',
+                           'inject\zh_main_patch.js', 'tools\scan_filter.py')) {
+            if ($list -notmatch [regex]::Escape($f)) { throw "exe 内缺少内嵌资源：$f" }
+          }
+          Write-Host "冒烟测试通过"
+
+      - name: 组装免安装包（exe + 外置词典，便于自行改词）
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path package | Out-Null
+          Copy-Item dist\antigravity-zh.exe package\
+          Copy-Item -Recurse dict package\dict
+          Compress-Archive -Path package\* -DestinationPath dist\antigravity-zh-with-dict.zip
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: antigravity-zh-windows-x64
+          path: |
+            dist/antigravity-zh.exe
+            dist/antigravity-zh-with-dict.zip
+
+      - name: 发布 Release（仅打 tag 时）
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          # 按 commit 自动生成发布说明，省得每次手写
+          generate_release_notes: true
+          files: |
+            dist/antigravity-zh.exe
+            dist/antigravity-zh-with-dict.zip
