@@ -19,7 +19,7 @@ jobs:
       # action 用 v5 / v6：这些版本起改用 Node 24 运行时；v4 / v5 那一代在 runner
       # 上会报 "Node.js 20 is deprecated ... being forced to run on Node.js 24"。
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
       - uses: actions/setup-node@v5

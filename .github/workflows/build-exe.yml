@@ -16,7 +16,7 @@ jobs:
       # 上会报 "Node.js 20 is deprecated ... being forced to run on Node.js 24"。
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           # 这里不能加 cache: pip。该选项要求仓库里存在 requirements.txt /
