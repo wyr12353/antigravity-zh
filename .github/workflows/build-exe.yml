@@ -12,9 +12,11 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      # action 用 v5 / v6：这些版本起改用 Node 24 运行时；v4 / v5 那一代在 runner
+      # 上会报 "Node.js 20 is deprecated ... being forced to run on Node.js 24"。
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
@@ -69,7 +71,7 @@ jobs:
           Compress-Archive -Path package\* -DestinationPath dist\antigravity-zh-with-dict.zip
 
       - name: 上传产物
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: antigravity-zh-windows-x64
           path: |
