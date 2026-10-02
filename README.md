@@ -166,19 +166,25 @@ python tools/verify.py --from-dict  # 直接读 dict/*.json，不依赖安装目
 
 ## 直接改词典
 
-编辑 `dict/*.json`（JSON，键为英文原文、值为中文）：
+编辑 `dict/*.json`（JSON，键为英文原文、值为中文）。括号里是该文件承载的**段落名**，
+它和文件名并不总是一致：
 
-- `common.json` — `exact` 整句精确匹配；`words` ≤3 词小写弱匹配
-- `permissions.json` — 权限弹窗专项（按钮、开关说明、权限条目）
-- `prefix_rules.json` — `rules` 前缀规则（命中即整句替换），适合被截断/拼接的长文案
-- `rules.json` — `template` 整句模板规则 `[正则, 标志, 译文模板]`，处理运行时拼接的句子
-  （如 `Select model, current: <模型>`），模板里 `$1` 引用捕获组；**按顺序匹配，先命中者生效**
-- `menus.json` — `menus` 原生菜单标签（Windows 上是系统托盘菜单；macOS 上是顶部菜单栏）
-- `ui_v2191.json` — 按 `missing` 候选批量补译的界面文案（设置项说明、主题颜色描述、
-  错误提示等）；文件名排在 `ui_extra.json` 之后，同名键以本文件为准
+- `common.json`（`exact` / `words`）— 整句精确匹配；`words` 是 ≤3 词的小写弱匹配
+- `permissions.json`（`exact` / `rules`）— 权限弹窗专项（按钮、开关说明、权限条目）
+- `prefix_rules.json`（**`rules`**）— 前缀规则（命中即整句替换），适合被截断/拼接的长文案
+- `template_rules.json`（**`template`**）— 整句模板规则 `[正则, 标志, 译文模板]`，处理运行时
+  拼接的句子（如 `Select model, current: <模型>`），模板里 `$1` 引用捕获组；**按顺序匹配，先命中者生效**
+- `menus.json`（`menus`）— 原生菜单标签（Windows 上是系统托盘菜单；macOS 上是顶部菜单栏）
+- `ui_extra.json`（`exact`）— 早期批量提取的界面文案
+- `ui_v2191.json`（`exact`）— 按 `missing` 候选批量补译的界面文案（设置项说明、主题颜色描述、错误提示等）
 
-多个文件按文件名顺序合并，后者覆盖前者。改完重跑 `patch` 即生效，
-改完建议跑一次 `python tools/verify.py` 确认没有回归。
+> `prefix_rules.json` 承载的段落名是 `rules`（历史命名），跟文件名并不字面一致。而模板
+> 规则那个文件原先也叫 `rules.json`，于是出现"文件名叫 rules、里面装的却是 `template`"
+> 这种最容易看走眼的误导，已改名为 `template_rules.json`。
+
+多个文件按**文件名顺序**合并，后者覆盖前者（即上面自上而下的顺序，越靠后优先级越高）。
+**新增词典文件时文件名就决定了它的覆盖优先级** —— 取名过于靠前（如 `aaa_fix.json`）
+会被后面的文件静默覆盖。改完重跑 `patch` 即生效，建议再跑一次 `python tools/verify.py` 确认无回归。
 
 > `ui_extra.json` 现在是**直接维护的词典文件**。早期它由 `tools/generate_extended_dict.py`
 > 生成，该脚本已退役——它的 752 条映射与 23 条模板规则已全部落在词典里（无一缺失），
@@ -197,10 +203,11 @@ tools/scan_filter.py   未翻译文案的噪声过滤（可单独运行清洗 ou
 tools/verify.py        用真实注入产物回归验证词典与规则
 tools/js_check.js      真实 Node 引擎校验（由 verify.py 调用，非独立入口）
 tools/verify_cases.json 验证用例（改这里即可扩充测试）
-tools/selfcheck.py     提交前自检（语法/词典/占位符/隐私），CI 亦运行它
+tools/selfcheck.py     提交前自检（七组：语法/词典/占位符/噪声等价/运行时规则/用例/隐私）
 LICENSE                MIT（版权归属见文件头）
 .gitignore             忽略运行产物与缓存
 .gitattributes         统一 LF 行尾
+.github/dependabot.yml 每月自动跟进 actions 版本并提 PR
 .github/workflows/check.yml  CI：跑 tools/selfcheck.py 与 tools/verify.py --from-dict
 .github/workflows/build-exe.yml  CI：打 tag 时构建单文件 exe 并发布 Release
 out/                   运行产物（已 gitignore，可随时重建）

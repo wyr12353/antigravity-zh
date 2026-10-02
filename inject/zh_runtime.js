@@ -142,7 +142,7 @@
   }
 
   // ---------- 规则表：整句模板 ----------
-  // 数据来自 dict/rules.json（由 patcher 注入），此处只做编译。
+  // 数据来自 dict/template_rules.json（由 patcher 注入），此处只做编译。
   // 按顺序匹配、先命中者生效（若存在宽泛的兜底规则，应排在最后）。
   var TEMPLATE_RULES = __AGZH_TEMPLATE_RULES__.map(function (r) {
     return [new RegExp(r[0], r[1] || ""), r[2]];
