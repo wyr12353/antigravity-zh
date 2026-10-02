@@ -16,13 +16,14 @@ jobs:
         # 3.11 与 build-exe.yml 的打包环境保持一致。
         python-version: ["3.9", "3.11"]
     steps:
-      # action 用 v5 / v6：这些版本起改用 Node 24 运行时；v4 / v5 那一代在 runner
-      # 上会报 "Node.js 20 is deprecated ... being forced to run on Node.js 24"。
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      # 各 action 统一到当前最新主版本（后续由 Dependabot 跟进）。
+      # 早先的 v4 / v5 那一代跑在 Node 20 上，runner 会报
+      # "Node.js 20 is deprecated ... being forced to run on Node.js 24"。
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           # 这个是给测试用的 Node 运行时，不是 action 自身的。Node 20 已于
           # 2026-04 EOL，改用当前 LTS。

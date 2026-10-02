@@ -12,11 +12,12 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      # action 用 v5 / v6：这些版本起改用 Node 24 运行时；v4 / v5 那一代在 runner
-      # 上会报 "Node.js 20 is deprecated ... being forced to run on Node.js 24"。
-      - uses: actions/checkout@v5
+      # 各 action 统一到当前最新主版本（后续由 Dependabot 跟进）。
+      # 早先的 v4 / v5 那一代跑在 Node 20 上，runner 会报
+      # "Node.js 20 is deprecated ... being forced to run on Node.js 24"。
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           # 这里不能加 cache: pip。该选项要求仓库里存在 requirements.txt /
@@ -77,7 +78,7 @@ jobs:
           Compress-Archive -Path package\* -DestinationPath dist\antigravity-zh-with-dict.zip
 
       - name: 上传产物
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: antigravity-zh-windows-x64
           path: |
@@ -86,7 +87,7 @@ jobs:
 
       - name: 发布 Release（仅打 tag 时）
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           # 按 commit 自动生成发布说明，省得每次手写
           generate_release_notes: true
