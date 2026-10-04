@@ -138,6 +138,10 @@
     ["Interview me to align on a plan.", "通过向我连续提问来对齐计划。"],
     ["Invoke a team of agents to autonomously tackle large projects.", "调用一组智能体团队自主处理大型项目。"],
     ["Reflect on recent successes or corrections to capture reusable skills or rules.", "复盘近期的成功或纠正，沉淀可复用的技能或规则。"],
-    ["Invoke the Boost multi-agent orchestrator for complex tasks.", "调用 Boost 多智能体编排器处理复杂任务。"]
+    ["Invoke the Boost multi-agent orchestrator for complex tasks.", "调用 Boost 多智能体编排器处理复杂任务。"],
+    ["constructor", ""],
+    ["toString", ""],
+    ["valueOf", ""],
+    ["hasOwnProperty", ""]
   ]
 }

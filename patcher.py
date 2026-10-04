@@ -58,7 +58,12 @@ def _resource_dir(name):
         beside = Path(sys.executable).resolve().parent / name
         if beside.is_dir():
             return beside
-        return Path(getattr(sys, "_MEIPASS", PROJECT_DIR)) / name
+        embedded = Path(getattr(sys, "_MEIPASS", PROJECT_DIR)) / name
+        if not embedded.is_dir():
+            # 最常见的原因是杀软把自解压目录里的文件当威胁隔离了
+            raise SystemExit(f"[错误] 找不到内嵌资源 {name}/（exe 同级与解压目录都没有）。\n"
+                             "        可能被杀毒软件隔离，请重新解压或将本程序加入白名单。")
+        return embedded
     return PROJECT_DIR / name
 
 
@@ -140,10 +145,15 @@ DEV_NOISE = ("must not", "cannot be", "Cannot ", "is not allowed", "failed to re
 RUNTIME_MARKER = "// >>> antigravity-zh runtime"
 MAINPATCH_MARKER = "// >>> antigravity-zh main patch"
 
-# 注入模板里的数据占位符：只认"等号右边的 __AGZH_*__"。
-# 模板里的运行时标志（window.__AGZH_LOADED__ / process.__AGZH_LOADED__）不是数据
-# 占位符，若按 __AGZH_[A-Z_]+__ 泛匹配会被误判为"未填充"而中止打补丁。
-DATA_PLACEHOLDER_RE = re.compile(r'=\s*"?(__AGZH_[A-Z_]+__)"?')
+# 注入模板里的 __AGZH_*__ 分两类：数据占位符（patcher 注入数据）与运行时标志
+# （挂在 window / Menu 上防重复初始化，不是数据，名单在这里维护）。
+RUNTIME_FLAGS = {"__AGZH_LOADED__", "__AGZH_MENU_HOOKED__"}
+DATA_PLACEHOLDER_RE = re.compile(r"__AGZH_[A-Z_]+__")
+
+
+def data_placeholders(text):
+    """提取模板里引用的数据占位符（排除运行时标志）。"""
+    return {p for p in DATA_PLACEHOLDER_RE.findall(text) if p not in RUNTIME_FLAGS}
 
 # 正则元字符：用于从模板规则里截出"字面前缀"
 RE_META = re.compile(r"[\\^$.*+?()\[\]{}|]")
@@ -238,18 +248,39 @@ def read_version(source):
 
 # Antigravity 的伴生进程：taskkill 掉主进程后 language_server / webm_encoder
 # 仍会在释放文件句柄，紧接着的目录删除或改名可能因此失败。
-APP_PROCESSES = ("Antigravity.exe", "language_server.exe", "webm_encoder.exe")
+#
+# 这两个名字并非 Antigravity 独有，按映像名全系统 taskkill 会误杀第三方同名
+# 进程，所以伴生进程只在确认其可执行路径位于本安装目录之后才结束。
+COMPANION_PROCESSES = ("language_server.exe", "webm_encoder.exe")
 
 
 def running_processes():
-    """返回仍在运行的 Antigravity 相关进程名（空列表表示全部已退出）。"""
+    """返回仍在运行的 Antigravity 主进程名（空列表表示已退出）。
+
+    只认 Antigravity.exe：它决定"应用是否还在运行"，名字足够特异；
+    伴生进程是否残留由 companion_left() 单独按路径判定。
+    """
     # tasklist 在中文 Windows 上输出 GBK，这里只按字节匹配进程名，避免解码问题
     try:
         result = subprocess.run(["tasklist"], capture_output=True, check=False)
     except OSError:
         return []
-    out = result.stdout or b""
-    return [name for name in APP_PROCESSES if name.encode() in out]
+    return ["Antigravity.exe"] if b"Antigravity.exe" in (result.stdout or b"") else []
+
+
+def companion_left(install):
+    """返回仍在本安装目录下运行的伴生进程名（按可执行路径过滤）。"""
+    script = ("Get-Process language_server, webm_encoder -ErrorAction SilentlyContinue | "
+              "Where-Object { $_.Path -and $_.Path.StartsWith('" + str(install) + "') } | "
+              "ForEach-Object { $_.ProcessName + '.exe' }")
+    try:
+        result = subprocess.run(["powershell", "-NoProfile", "-Command", script],
+                                capture_output=True, check=False, timeout=30)
+        out = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
+    except (OSError, subprocess.TimeoutExpired):
+        return []          # PowerShell 不可用时按"无伴生进程"处理，后续 _retry 兜底
+    return sorted({line.strip() + (".exe" if not line.strip().endswith(".exe") else "")
+                   for line in out.splitlines() if line.strip()})
 
 
 def _retry(func, attempts=5, delay=0.6):
@@ -267,28 +298,45 @@ def _retry(func, attempts=5, delay=0.6):
     raise last
 
 
-def ensure_closed(auto_yes):
+def ensure_closed(auto_yes, install=None):
+    """结束 Antigravity 及其伴生进程。
+
+    install 用于伴生进程的路径过滤（支持 --dir 自定义安装目录）；
+    未提供时退回默认安装目录。
+    """
+    target = Path(install) if install else (
+        Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "antigravity")
     running = running_processes()
-    if not running:
+    companions = companion_left(target)
+    if not running and not companions:
         return
-    print(f"[提示] Antigravity 正在运行（{'、'.join(running)}），补丁需要先关闭它。")
+    if running:
+        print("[提示] Antigravity 正在运行，补丁需要先关闭它。")
+    else:
+        print("[提示] Antigravity 主进程已退出，但仍有伴生进程占用文件。")
     if not auto_yes:
-        answer = input("现在关闭 Antigravity 并继续? [Y/n] ").strip().lower()
+        try:
+            answer = input("现在关闭 Antigravity 并继续? [Y/n] ").strip().lower()
+        except EOFError:
+            raise SystemExit("[中止] 非交互环境无法询问，请加 --yes 或手动关闭 Antigravity。")
         if answer and not answer.startswith("y"):   # 只有明确同意才继续
             raise SystemExit("[中止] 请关闭 Antigravity 后重试。")
-    # 伴生进程（language_server / webm_encoder）同样占着 resources/app 下的文件句柄，
-    # 一并结束；它们没有可点的退出入口，只杀主进程会让用户卡在"仍有进程未退出"。
-    for name in APP_PROCESSES:
-        r = subprocess.run(["taskkill", "/F", "/IM", name], capture_output=True, check=False)
-        if r.returncode != 0:
-            print(f"[提示] 结束 {name} 时 taskkill 返回 {r.returncode}（可能已退出或权限不足）")
+    # 主进程按映像名结束（名字唯一）；伴生进程按可执行路径结束，
+    # 它们没有可点的退出入口，只杀主进程会让用户卡在"仍有进程未退出"。
+    subprocess.run(["taskkill", "/F", "/IM", "Antigravity.exe"],
+                   capture_output=True, check=False)
+    ps = ("Get-Process language_server, webm_encoder -ErrorAction SilentlyContinue | "
+          "Where-Object { $_.Path -and $_.Path.StartsWith('" + str(target) + "') } | "
+          "Stop-Process -Force")
+    subprocess.run(["powershell", "-NoProfile", "-Command", ps],
+                   capture_output=True, check=False)
     # 等最多 10 秒让句柄释放。超时不中止：真正锁住 resources/app 的是主进程，
     # 残留的伴生进程交给后续的 _retry 与错误提示兜底。
     for _ in range(20):
         time.sleep(0.5)
-        if not running_processes():
+        if not running_processes() and not companion_left(target):
             break
-    leftover = running_processes()
+    leftover = running_processes() + companion_left(target)
     if leftover:
         print(f"[提示] 仍有进程未退出（{'、'.join(leftover)}），继续尝试；若卡住请手动结束它们")
     else:
@@ -307,7 +355,13 @@ def load_dicts():
     dupes = []
     count = 0
     for path in sorted(DICT_DIR.glob("*.json")):
-        data = json.loads(path.read_text(encoding="utf-8"))
+        try:
+            # utf-8-sig 容忍带 BOM 的文件（记事本等编辑器可能写入），对无 BOM 文件无副作用
+            data = json.loads(path.read_text(encoding="utf-8-sig"))
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            raise SystemExit(f"[错误] 词典文件解析失败：{path.name}\n"
+                             f"        {e}\n"
+                             "        修复或移除该文件后重试（所有 dict/*.json 都会被合并）。")
         # 结构校验：模板/前缀规则写错元数会在运行时才炸，这里给出文件与序号
         for i, r in enumerate(data.get("rules", [])):
             if not (isinstance(r, list) and len(r) == 2 and all(isinstance(x, str) for x in r)):
@@ -354,7 +408,7 @@ def build_js(template_name, replacements):
     没有的占位符，都在打补丁前报错，而不是注入半成品让应用起不来。
     """
     text = (INJECT_DIR / template_name).read_text(encoding="utf-8")
-    unknown = set(DATA_PLACEHOLDER_RE.findall(text)) - set(replacements)
+    unknown = data_placeholders(text) - set(replacements)
     if unknown:
         raise SystemExit(f"[错误] {template_name} 含未提供的占位符: {', '.join(sorted(unknown))}")
     for key, value in replacements.items():
@@ -390,6 +444,9 @@ def apply_targeted_replaces(app_dir):
     for rel, pairs in TARGETED_REPLACES.items():
         target = app_dir / rel
         if not target.exists():
+            # 文件整个消失（改名/合并进别的 bundle）比"字符串变了"更彻底，
+            # 同样不能静默——README 承诺过版本漂移不静默失效
+            print(f"[提示] {rel} 不存在，跳过 {len(pairs)} 处字面量替换（客户端结构可能已变）")
             continue
         content = original = target.read_text(encoding="utf-8")
         missed = []
@@ -397,7 +454,7 @@ def apply_targeted_replaces(app_dir):
             if old in content:
                 content = content.replace(old, new)
             else:
-                missed.append((old.splitlines() or [old])[0][:48])
+                missed.append(old.splitlines()[0][:48])
         if content != original:
             target.write_text(content, encoding="utf-8")
             print(f"[成功] 字面量替换 -> {rel}")
@@ -407,7 +464,7 @@ def apply_targeted_replaces(app_dir):
 
 
 def do_patch(install, scan, auto_yes, launch):
-    ensure_closed(auto_yes)
+    ensure_closed(auto_yes, install)
 
     source, source_note = asar_source(install)
     version = read_version(source)
@@ -437,8 +494,15 @@ def do_patch(install, scan, auto_yes, launch):
                 f"[错误] 无法删除 {APP_REL}：{e}\n"
                 "        Antigravity 可能仍在运行或目录被占用，请彻底退出后重试。\n"
                 "        若 Antigravity 已无法启动，运行 python patcher.py restore 还原官方原版。")
-    with Asar(backup_path) as a:
-        count, total = a.extract_to(app_dir)
+    try:
+        with Asar(backup_path) as a:
+            count, total = a.extract_to(app_dir)
+    except (AsarError, OSError) as e:
+        # 此时 app.asar 已改名、resources/app 只解了一半：Electron 会优先加载
+        # 这个半成品目录，应用直接损坏。必须给出可执行的恢复路径而不是抛栈。
+        raise SystemExit(
+            f"[错误] 解包 app.asar 失败：{e}\n"
+            f"        {APP_REL} 现在是不完整状态，请运行 python patcher.py restore 还原官方原版。")
     print(f"[完成] 解包 {count} 个文件 / {total} 字节 -> {APP_REL}")
 
     # 3. 并入 app.asar.unpacked（native 模块等不在 asar 内的文件）
@@ -450,8 +514,7 @@ def do_patch(install, scan, auto_yes, launch):
     # 4. 注入
     dicts = load_dicts()
     entries, rules = dict_counts(dicts)
-    print(f"[信息] 词典规模: {dict_summary(dicts)}")
-    print(f"[信息] 合计词条 {entries} 条 / 规则 {rules} 条")
+    print(f"[信息] 词典规模: {dict_summary(dicts)}（合计词条 {entries} 条 / 规则 {rules} 条）")
 
     runtime = build_js("zh_runtime.js", {
         "__AGZH_EXACT__": json.dumps(dicts["exact"], ensure_ascii=False, sort_keys=True),
@@ -477,13 +540,17 @@ def do_patch(install, scan, auto_yes, launch):
 
     # scan 模式归档上一轮收集结果（收集文件是累加的，不归档会让旧计数一直滞留）。
     # 放在注入成功之后：否则注入失败时上一轮收集已被改名，而补丁并没有生效。
+    # 归档本身失败不致命（只是新旧计数混在一起），提示出来继续，不能让补丁白打。
     if scan:
         collector = OUT_DIR / "untranslated.json"
         if collector.exists():
-            _retry(lambda: os.replace(collector, OUT_DIR / "untranslated.prev.json"))
-            print("[完成] 上一轮收集结果已归档 -> out/untranslated.prev.json")
+            try:
+                _retry(lambda: os.replace(collector, OUT_DIR / "untranslated.prev.json"))
+                print("[完成] 上一轮收集结果已归档 -> out/untranslated.prev.json")
+            except OSError as e:
+                print(f"[提示] 上一轮收集结果归档失败（{e}），新旧数据将混在一起")
 
-    # 5. 写补丁标记
+    # 5. 写补丁标记（先写临时文件再原子替换：status 或杀软不会读到半截 JSON）
     marker = {
         "version": version,
         "scan": scan,
@@ -492,16 +559,23 @@ def do_patch(install, scan, auto_yes, launch):
         "injected": injected,
         "time": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
-    (app_dir / MARKER_NAME).write_text(
+    marker_file = app_dir / MARKER_NAME
+    tmp_marker = marker_file.with_suffix(".json.tmp")
+    tmp_marker.write_text(
         json.dumps(marker, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp_marker, marker_file)
 
     print(f"[完成] {'scan' if scan else 'patch'} 补丁完成（基于 v{version}）。")
     if scan:
         print("------- scan 模式使用说明 -------")
         print("1. 启动 Antigravity，把要汉化的界面各点一遍（设置、右键菜单、对话框…）")
         print(f"2. 未翻译英文会实时记录到 {OUT_DIR / 'untranslated.json'}")
-        print("3. 运行 python tools/merge_dict.py 逐条补充翻译")
-        print("4. 重新运行 python patcher.py patch 应用新词典")
+        if getattr(sys, "frozen", False):
+            print("3. exe 旁有 dict/ 的话，把新词条加进其中任意一份后重新运行本程序")
+            print("   （没有 dict/ 就下载 with-dict 版，内嵌词典无法直接编辑）")
+        else:
+            print("3. 运行 python tools/scan_filter.py 清洗，再用 python tools/merge_dict.py 逐条补译")
+            print("4. 重新运行 python patcher.py patch 应用新词典")
         print("--------------------------------")
     if launch:
         launch_app(install)
@@ -558,7 +632,7 @@ def launch_app(install):
 
 
 def do_restore(install, auto_yes):
-    ensure_closed(auto_yes)
+    ensure_closed(auto_yes, install)
     asar_path = install / ASAR_REL
     backup_path = install / BACKUP_REL
     app_dir = install / APP_REL
@@ -602,13 +676,23 @@ def do_status(install):
 
     print(f"安装目录   : {install}")
     print(f"当前版本   : {current}（{source_note}）")
-    dicts = load_dicts()
-    print(f"词典规模   : {dict_summary(dicts)}")
+    # status 是排查问题的入口，词典坏了也要把补丁状态打出来，不能在这里断掉
+    try:
+        dicts = load_dicts()
+        print(f"词典规模   : {dict_summary(dicts)}")
+    except SystemExit as e:
+        print(f"词典规模   : 不可用（{e}）")
 
     if not marker_path.exists():
         print("补丁状态   : 未汉化（运行 python patcher.py patch）")
         return
-    marker = json.loads(marker_path.read_text(encoding="utf-8"))
+    try:
+        marker = json.loads(marker_path.read_text(encoding="utf-8-sig"))
+    except (json.JSONDecodeError, OSError) as e:
+        # 上次 patch 中途被杀可能留下半截标记
+        print(f"补丁状态   : 标记文件损坏（{e}）—— 请重跑 python patcher.py patch，"
+              "或用 restore 还原后重试")
+        return
     print(f"补丁状态   : 已汉化 @ v{marker.get('version')}（{marker.get('time')}）")
     if marker.get("entries") is not None:
         print(f"补丁词典   : 词条 {marker.get('entries')} 条 / 规则 {marker.get('rules', '?')} 条")
@@ -644,7 +728,9 @@ def do_missing(install, top, keep):
     #
     # 日志是跨多次启动追加的，最后一条端口未必属于当前实例；端口也可能已被
     # 别的本地服务占用。所以从最新的往前逐个探测，并校验响应确实像 JS bundle。
-    ctx = ssl._create_unverified_context()
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE   # 本地服务是自签名证书，仅连 127.0.0.1
     data = None
     used_port = None
     tried = []
@@ -774,21 +860,24 @@ def main():
     m.add_argument("--top", type=int, default=30, help="控制台打印条数（默认 30）")
     m.add_argument("--keep", action="store_true", help="保留下载的界面 bundle 便于复查")
 
-    args = parser.parse_args()
-
-    # 无子命令 = 双击 exe：按"一键汉化并启动"处理，结束后暂停窗口
-    oneclick = args.command is None
-    if oneclick:
-        if args.dir:
-            # 只给 --dir 而不给子命令：多半是想查看状态，绝不能静默执行
-            # "一键汉化并启动"（会关进程、改安装目录）。
-            raise SystemExit("[提示] 请指定子命令：patch / scan / restore / status / missing")
-        print("=" * 54)
-        print("  Antigravity 中文汉化（一键版）")
-        print("=" * 54)
-        args.command, args.yes, args.launch = "patch", True, True
-
+    oneclick = False
     try:
+        # parse_args 也要在 try 里：把文件拖到 exe 上会传入一个路径参数，
+        # argparse 报错时 sys.exit(2) 若发生在 try 之外，报错窗口会一闪而过
+        args = parser.parse_args()
+
+        # 无子命令 = 双击 exe：按"一键汉化并启动"处理，结束后暂停窗口
+        oneclick = args.command is None
+        if oneclick:
+            if args.dir:
+                # 只给 --dir 而不给子命令：多半是想查看状态，绝不能静默执行
+                # "一键汉化并启动"（会关进程、改安装目录）。
+                raise SystemExit("[提示] 请指定子命令：patch / scan / restore / status / missing")
+            print("=" * 54)
+            print("  Antigravity 中文汉化（一键版）")
+            print("=" * 54)
+            args.command, args.yes, args.launch = "patch", True, True
+
         install = find_install(args.dir)
         if args.command == "patch":
             do_patch(install, scan=False, auto_yes=args.yes, launch=args.launch)
@@ -801,14 +890,21 @@ def main():
         elif args.command == "missing":
             do_missing(install, top=args.top, keep=args.keep)
     except SystemExit as e:
-        if not oneclick:
+        # --help / usage 的 exit(0) 直接返回：build-exe 的 CI 冒烟测试会跑
+        # `exe --help`，这里若停留等待输入会把 CI 卡到超时
+        if isinstance(e.code, int) and e.code == 0:
+            return 0
+        # 需要停留窗口的三种情况：双击 exe（frozen）、拖文件到 exe（argparse
+        # exit(2)）、源码 oneclick；源码模式带子命令是在终端里跑的，直接抛
+        if not oneclick and not getattr(sys, "frozen", False):
             raise
-        if e.code:
+        if e.code and not isinstance(e.code, int):
             print(e.code)
-        _pause()
-        return 1 if e.code else 0
+        if oneclick or getattr(sys, "frozen", False):
+            _pause()
+        return 1
     except Exception as e:
-        if getattr(args, "debug", False):
+        if "args" in locals() and getattr(args, "debug", False):
             raise                    # --debug 时保留完整 traceback，便于定位
         print(f"[错误] 执行失败：{e}")
         if oneclick:

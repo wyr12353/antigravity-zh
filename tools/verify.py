@@ -101,8 +101,8 @@ def run_js_check(dicts, cases):
         print(f"\n[失败] 无法解析 js_check.js 的输出：{e}")
         return 1
 
-    js_failed = result["failed"]
-    total = result["passed"] + js_failed
+    js_failed = result.get("failed", 0)
+    total = result.get("passed", 0) + js_failed
     print(f"Node 真实引擎: {result['passed']}/{total} 通过"
           + ("，全部正确" if js_failed == 0 else f"，{js_failed} 条未通过"))
     for item in result.get("failures", []):
@@ -135,13 +135,15 @@ def make_translate(dicts):
     template_rules, prefix_rules = dicts["template"], dicts["rules"]
 
     def learn(m):
-        return "了解更多关于 " + exact.get(m.group(1), m.group(1)) + " 的信息"
+        # or 兜底：与 JS 的 EXACT[m[1]] || m[1] 一致，空串译值走原文
+        return "了解更多关于 " + (exact.get(m.group(1)) or m.group(1)) + " 的信息"
 
     def limit(prefix_zh, m):
         return prefix_zh + duration_zh(m.group(1)) + " 后完全重置。"
 
     # 与 zh_runtime.js 的 FN_RULES 一一对应。运行时那 5 条由 JS 函数实现，
-    # 这里用等价的正则 + 字符串拼接表达。
+    # 这里用等价的正则 + 字符串拼接表达。词典查找都用 .get(...)+truthy，
+    # 与 JS 的真值判断一致（空串译值视为未命中）。
     fn_rules = (
         (r"^Learn more about (.+)$", learn),
         (r"^You have used some of your weekly limit, it will fully refresh in (.*)\.$",
@@ -149,10 +151,10 @@ def make_translate(dicts):
         (r"^You have used some of your 5-hour limit, it will fully refresh in (.*)\.$",
          lambda m: limit("您已使用部分五小时限额，它将在 ", m)),
         (r"^Allow (.+)\?$",
-         lambda m: ("允许" + exact[m.group(1)] + "吗？") if m.group(1) in exact
+         lambda m: ("允许" + exact[m.group(1)] + "吗？") if exact.get(m.group(1))
          else ("允许 " + m.group(1) + " 吗？")),
         (r"^Save rule to always allow (.+)\?$",
-         lambda m: ("保存规则以始终允许" + exact[m.group(1)] + "吗？") if m.group(1) in exact
+         lambda m: ("保存规则以始终允许" + exact[m.group(1)] + "吗？") if exact.get(m.group(1))
          else ("保存规则以始终允许 " + m.group(1) + " 吗？")),
     )
 
@@ -160,13 +162,16 @@ def make_translate(dicts):
         trimmed = text.strip()
         if not trimmed or CJK_RE.search(trimmed):
             return text
-        # 注意：JS 的 String.replace(子串, x) 只替换第一处，Python 的 str.replace
-        # 默认替换全部，所以统一传 count=1，保持与运行时语义一致。
+        # 与 JS 真实语义对齐的三处细节：
+        #   - 词典按真值判断，空串译值视为未命中（JS: if (EXACT[trimmed])）
+        #   - String.replace(子串) 只替换第一处 → 统一 count=1
+        #   - 模板命中但替换结果与原文相同时继续尝试后续规则（JS 的 !== 比较）
         def sub(out):
             return text.replace(trimmed, out, 1)
 
-        if trimmed in exact:
-            return sub(exact[trimmed])
+        hit = exact.get(trimmed)
+        if hit:
+            return sub(hit)
 
         for pattern, build in fn_rules:
             m = re.match(pattern, trimmed)
@@ -177,15 +182,23 @@ def make_translate(dicts):
             m = re.match(pattern, trimmed, re.I if "i" in flags else 0)
             if m:
                 # 用 re.sub 按捕获组精确替换：早先的循环 replace("$1", ...) 会把
-                # "$10" 当成 "$1" 后接 "0" 处理，产出错误译文。
-                return sub(re.sub(r"\$(\d+)", lambda mm: m.group(int(mm.group(1))) or "", tpl))
+                # "$10" 当成 "$1" 后接 "0" 处理，产出错误译文。组号越界时 JS 的
+                # String.replace 保留字面 "$n"，这里对齐而不是裸抛 IndexError。
+                def group(mm):
+                    idx = int(mm.group(1))
+                    return m.group(idx) if idx <= m.re.groups else mm.group(0)
+                replaced = re.sub(r"\$(\d+)", group, tpl)
+                if replaced != trimmed:
+                    return sub(replaced)
 
         for prefix, translation in prefix_rules:
             if prefix in text:
                 return translation
 
-        if len(trimmed.split()) <= 3 and trimmed.lower() in words:
-            return sub(words[trimmed.lower()])
+        if len(trimmed.split()) <= 3:
+            word = words.get(trimmed.lower())
+            if word:
+                return sub(word)
         return text
 
     return translate

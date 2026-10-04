@@ -13,12 +13,23 @@
   if (window.__AGZH_LOADED__) return;
   window.__AGZH_LOADED__ = true;
 
-  var EXACT = __AGZH_EXACT__;
-  var WORDS = __AGZH_WORDS__;
+  var EXACT = nullProto(__AGZH_EXACT__);
+  var WORDS = nullProto(__AGZH_WORDS__);
   var PREFIX_RULES = __AGZH_PREFIX_RULES__;
   var SCAN = __AGZH_SCAN__;
 
   var CJK_RE = /[\u4e00-\u9fff\u3400-\u4dbf]/;
+
+  // 防 JS 原型链污染：EXACT/WORDS 这类数据若直接用 [] 查找，
+  // "constructor"/"toString"/"valueOf" 等键会命中 Object.prototype（恒为真值），
+  // 界面上这些裸词会被替换成 "function Object() { [native code] }"。
+  // 包装成无原型的对象，所有后续 [] 查找即安全。
+  function nullProto(o) {
+    var r = Object.create(null);
+    for (var k in o) r[k] = o[k];
+    return r;
+  }
+
   // 注意：[role=combobox] 刻意不列入跳过区。
   // 设置项的下拉选择器（安全预设 / 终端命令自动执行 / 工件审阅模式…）把"当前值"
   // 渲染在 combobox 自身或其子元素里，跳过它就等于折叠状态的值永远不翻译，
@@ -30,14 +41,14 @@
   // ---------- 收集器（scan 模式）----------
   var collector = null;
   if (SCAN) {
-    var KEYNAMES = { ctrl: 1, control: 1, shift: 1, alt: 1, enter: 1, tab: 1, esc: 1, escape: 1,
+    var KEYNAMES = nullProto({ ctrl: 1, control: 1, shift: 1, alt: 1, enter: 1, tab: 1, esc: 1, escape: 1,
       space: 1, cmd: 1, meta: 1, option: 1, backspace: 1, delete: 1, del: 1, win: 1, windows: 1,
-      cmdorctrl: 1, up: 1, down: 1, left: 1, right: 1, home: 1, end: 1, pageup: 1, pagedown: 1 };
-    var JS_KEYWORDS = { const: 1, let: 1, "var": 1, "function": 1, "return": 1, "import": 1,
+      cmdorctrl: 1, up: 1, down: 1, left: 1, right: 1, home: 1, end: 1, pageup: 1, pagedown: 1 });
+    var JS_KEYWORDS = nullProto({ const: 1, let: 1, "var": 1, "function": 1, "return": 1, "import": 1,
       "export": 1, "class": 1, async: 1, await: 1, yield: 1, typeof: 1, instanceof: 1, "new": 1,
       "this": 1, "null": 1, "undefined": 1, "true": 1, "false": 1, boolean: 1, number: 1,
       string: 1, object: 1, symbol: 1, bigint: 1, "interface": 1, "enum": 1, "public": 1,
-      "private": 1, "protected": 1, "static": 1 };
+      "private": 1, "protected": 1, "static": 1 });
     // 与 tools/scan_filter.py 的 is_noise() 等价：代码片段/包名/版本号/符号残片一律不进收集
     var NO_LETTER_RE = /^[^A-Za-z\u4e00-\u9fff]*$/;
     var VERSION_RE = /^v?\d+(?:\.\d+)+(?:[-+][0-9A-Za-z.]+)?$/;
@@ -120,8 +131,8 @@
 
   // ---------- 工具函数 ----------
   // "3 days, 2 hours" → "3 天 2 小时"
-  // 注意 tools/verify.py 的 duration_zh 与 tools/js_check.js 的 durationZh
-  // 是同一套逻辑的另外两份实现，改动时必须三处同步。
+  // tools/verify.py 的 duration_zh 是本函数在 Python 模拟层的复刻，改动需两处同步；
+  // tools/js_check.js 直接截取本文件的实现，无需同步。
   function durationZh(s) {
     return s.replace(/days?/g, "天").replace(/hours?/g, "小时").replace(/minutes?/g, "分钟").replace(/,/g, "");
   }
@@ -189,10 +200,11 @@
       return t.replace(/(^\s*)of the customization budget is available\.?/g, "$1的自定义项预算可用额度。");
     }],
     ["Worked for", function (t) {
-      return t.replace(/Worked for ([\d.a-z ]+)/gi, function (_, ts) { return "运行耗时 " + elapsedZh(ts); });
+      // 捕获段含逗号："Worked for 2 hours, 30 minutes" 的后半段不能留在英文里
+      return t.replace(/Worked for ([\d.a-z, ]+)/gi, function (_, ts) { return "运行耗时 " + elapsedZh(ts); });
     }],
     ["Thought for", function (t) {
-      return t.replace(/Thought for ([\d.a-z ]+)/gi, function (_, ts) { return "思考耗时 " + elapsedZh(ts); });
+      return t.replace(/Thought for ([\d.a-z, ]+)/gi, function (_, ts) { return "思考耗时 " + elapsedZh(ts); });
     }],
     // 只处理"独立成句的 Working"（状态文本 "Working" / "Working..."）。
     // 早先用无边界子串命中，会把 "Working Directory: " 翻成"运行中 Directory: "——
@@ -292,17 +304,21 @@
       var p = translateText(el.placeholder, el);
       if (p !== el.placeholder) el.placeholder = p;
     }
-    if (el.title) { var t = translateText(el.title, el); if (t !== el.title) el.title = t; }
-    var aria = el.getAttribute && el.getAttribute("aria-label");
-    if (aria) { var a = translateText(aria, el); if (a !== aria) el.setAttribute("aria-label", a); }
-    var alt = el.getAttribute && el.getAttribute("alt");
-    if (alt) { var al = translateText(alt, el); if (al !== alt) el.setAttribute("alt", al); }
+    // title/aria-label/alt/data-tooltip 是 get→translate→set 的同一模式，收敛成表
+    var ATTRS = ["title", "aria-label", "alt", "data-tooltip"];
+    for (var ai = 0; ai < ATTRS.length; ai++) {
+      var attrName = ATTRS[ai];
+      var attrVal = el.getAttribute ? el.getAttribute(attrName) : null;
+      if (attrVal) {
+        var attrZh = translateText(attrVal, el);
+        if (attrZh !== attrVal) el.setAttribute(attrName, attrZh);
+      }
+    }
+    // 按钮的可见文本走 value property（非 attribute），单独处理
     if (el.tagName === "INPUT" && (el.type === "button" || el.type === "submit" || el.type === "reset") && el.value) {
       var v = translateText(el.value, el);
       if (v !== el.value) el.value = v;
     }
-    var tip = el.getAttribute && el.getAttribute("data-tooltip");
-    if (tip) { var dt = translateText(tip, el); if (dt !== tip) el.setAttribute("data-tooltip", dt); }
 
     // 属性处理完毕；跳过区内的元素不再递归处理文本与子节点
     if (skip) return;
@@ -358,7 +374,9 @@
         } else if (mu.type === "characterData") {
           processNode(mu.target);
         } else if (mu.type === "attributes" && mu.target && mu.target.nodeType === 1) {
-          if (!inSkipZone(mu.target)) processElement(mu.target);
+          // 不做跳过区过滤：processElement 对跳过区元素也是先译属性再 return，
+          // 输入框运行中动态切换的 placeholder 同样需要被翻到
+          processElement(mu.target);
         }
       }
     });

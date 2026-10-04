@@ -31,15 +31,17 @@ def _safe_parts(name):
 class Asar:
     def __init__(self, path):
         self.path = Path(path)
-        with self.path.open("rb") as f:
-            head = f.read(16)
-            if len(head) != 16:
-                raise AsarError(f"文件太小，不是 asar: {path}")
-            _magic, header_pickle_size, _u1, json_size = struct.unpack("<4I", head)
-            self.header = json.loads(f.read(json_size).decode("utf-8"))
-            # 内容区起始 = 前 8 字节 + 头部 pickle 总长（与 MIMICTE 同款算法，已实测验证）
-            self.base_offset = 8 + header_pickle_size
-            self._f = self.path.open("rb")
+        # 单句柄：先读 header 再保留同一个文件对象，省一次 open，
+        # 也消除两次 open 之间文件被替换的理论窗口
+        self._f = self.path.open("rb")
+        head = self._f.read(16)
+        if len(head) != 16:
+            self._f.close()
+            raise AsarError(f"文件太小，不是 asar: {path}")
+        _magic, header_pickle_size, _u1, json_size = struct.unpack("<4I", head)
+        self.header = json.loads(self._f.read(json_size).decode("utf-8"))
+        # 内容区起始 = 前 8 字节 + 头部 pickle 总长（与 MIMICTE 同款算法，已实测验证）
+        self.base_offset = 8 + header_pickle_size
 
     def close(self):
         self._f.close()

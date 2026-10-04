@@ -33,12 +33,16 @@ DICT_DIR = PROJECT_DIR / "dict"
 INJECT_DIR = PROJECT_DIR / "inject"
 TOOLS_DIR = PROJECT_DIR / "tools"
 
+# patcher 的 data_placeholders 被 check_placeholders 使用，必须模块级导入
+# （check_imports 里的函数级导入只服务它自己的"导入可用性"检查）
+sys.path.insert(0, str(PROJECT_DIR))
+import patcher  # noqa: E402
+
 # 词典文件允许出现的顶层段落及其类型
 SECTIONS = {"exact": dict, "words": dict, "menus": dict, "rules": list, "template": list}
 
-# 与 patcher.py 的 DATA_PLACEHOLDER_RE 对应：只认"等号右边的数据占位符"，
-# 模板里的运行时标志（__AGZH_LOADED__）不是数据占位符。
-DATA_PLACEHOLDER_RE = re.compile(r'=\s*"?(__AGZH_[A-Z_]+__)"?')
+# 占位符的提取/校验统一用 patcher.data_placeholders（上方已导入 patcher），
+# 不在本文件重复定义正则——patcher 改提取方式时这里自动跟随。
 PROVIDED_RE = re.compile(r'"(__AGZH_[A-Z_]+__)"\s*:')
 
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
@@ -112,9 +116,12 @@ def runtime_slice(start, end, what):
     """
     src = (INJECT_DIR / "zh_runtime.js").read_text(encoding="utf-8")
     try:
-        return src[src.index(start):src.index(end)]
-    except ValueError:
-        fail(f"无法从 zh_runtime.js 截取{what}（代码结构可能已变）")
+        i, j = src.index(start), src.index(end)
+        if j <= i:
+            raise ValueError("结束标记出现在开始标记之前（会截出空切片）")
+        return src[i:j]
+    except ValueError as e:
+        fail(f"无法从 zh_runtime.js 截取{what}：{e}（代码结构可能已变）")
         return None
 
 
@@ -164,15 +171,21 @@ def check_imports():
 
     语法正确不等于导入正确：形如 `re.compile("...%d..." % N)` 的写法在正则内部
     含 `%` 时会抛 ValueError，只有真正执行到那一行才会暴露。
+    tools 下的模块也一并导入：merge_dict 曾调用不存在的名字，那个 NameError
+    在 main 里、compile() 抓不到，导入链是能提前暴露的最后关口。
     """
     sys.path.insert(0, str(PROJECT_DIR))
+    sys.path.insert(0, str(TOOLS_DIR))
     try:
         import patcher  # noqa: F401
         import agasar   # noqa: F401
+        import scan_filter  # noqa: F401
+        import merge_dict   # noqa: F401
+        import verify       # noqa: F401
     except Exception as e:
         fail(f"导入核心模块失败：{type(e).__name__}: {e}")
         return
-    ok("核心模块可正常导入")
+    ok("核心模块可正常导入（含 tools 工具链）")
 
 
 def check_js_syntax():
@@ -227,6 +240,11 @@ def check_dicts():
                 re.compile(r[0], re.I if "i" in r[1] else 0)
             except re.error as e:
                 fail(f"{path.name} template[{i}] 正则非法：{e}")
+        # 空译值：运行时按真值判断（if (EXACT[trimmed])），空串词条等于不存在
+        for section in ("exact", "words"):
+            for key, val in data.get(section, {}).items():
+                if not val:
+                    fail(f"{path.name} {section} 键 {key!r} 译值为空——运行时按真值判断，空串词条不生效")
         for section in ("exact", "words", "menus"):
             for key in data.get(section, {}):
                 first = origin.setdefault((section, key), path.name)
@@ -237,6 +255,34 @@ def check_dicts():
     else:
         ok(f"词典共 {len(origin)} 个键，无跨文件重复；规则结构合法")
 
+    # 模板正则的 JS 侧把关：它们真正跑在 new RegExp 里，Python re 能编译不代表
+    # JS 能（如 Python 风格的 (?P<name>)）。一条在 JS 里编译失败会让注入后的
+    # 整个翻译引擎崩溃，而 status 仍显示已汉化。
+    if shutil.which("node"):
+        tpls = []
+        for path in sorted(DICT_DIR.glob("*.json")):
+            data = json.loads(path.read_text(encoding="utf-8-sig"))
+            for r in data.get("template", []):
+                tpls.append([path.name, r[0], r[1]])
+        script = (
+            "var tpls = JSON.parse(require('fs').readFileSync(process.argv[2], 'utf-8'));\n"
+            "var bad = [];\n"
+            "tpls.forEach(function (t) {\n"
+            "  try { new RegExp(t[1], t[2] || ''); } catch (e) { bad.push([t[0], t[1], String(e.message)]); }\n"
+            "});\n"
+            "console.log(JSON.stringify(bad));\n"
+        )
+        data_file = PROJECT_DIR / "out" / "_tpl_js_check.json"
+        data_file.parent.mkdir(parents=True, exist_ok=True)
+        data_file.write_text(json.dumps(tpls, ensure_ascii=False), encoding="utf-8")
+        js_bad = run_node("模板正则 JS 编译校验", "tpl_regex", script, [str(data_file)])
+        if js_bad is not None:
+            if js_bad:
+                for fname, pat, msg in js_bad[:5]:
+                    fail(f"{fname} 模板正则 JS 无法编译：{pat!r}（{msg}）")
+            else:
+                ok(f"模板正则 JS 编译通过（{len(tpls)} 条）")
+
 
 def check_placeholders():
     provided = set(PROVIDED_RE.findall((PROJECT_DIR / "patcher.py").read_text(encoding="utf-8")))
@@ -246,7 +292,7 @@ def check_placeholders():
     used = set()
     bad = 0
     for path in sorted(INJECT_DIR.glob("*.js")):
-        in_file = set(DATA_PLACEHOLDER_RE.findall(path.read_text(encoding="utf-8")))
+        in_file = patcher.data_placeholders(path.read_text(encoding="utf-8"))
         used |= in_file
         missing = in_file - provided
         if missing:
@@ -334,11 +380,15 @@ def check_noise_parity():
         fail(f"无法导入 scan_filter.is_noise：{e}")
         return
 
-    block = runtime_slice("    var KEYNAMES", "    var pending = new Map();", "isNoise 实现")
-    if block is None:
+    # 两段真实源码拼接：nullProto 的定义（isNoise 用的 KEYNAMES/JS_KEYWORDS
+    # 都经它包装）+ 收集器内部段。注意第二段必须起于 if (SCAN) { 之内、
+    # 终于块内——跨越块边界会截出括号不配平的半截脚本。
+    null_proto = runtime_slice("  function nullProto", "  // ---------- 收集器", "nullProto 实现")
+    noise_block = runtime_slice("    var KEYNAMES", "    var pending = new Map();", "isNoise 实现")
+    if null_proto is None or noise_block is None:
         return
 
-    script = block + (
+    script = null_proto + "\n" + noise_block + (
         'var fs=require("fs");'
         'var samples=JSON.parse(fs.readFileSync(process.argv[2],"utf-8"));'
         'console.log(JSON.stringify(samples.map(function(s){return isNoise(String(s).trim());})));'
@@ -372,7 +422,8 @@ def check_privacy():
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
         for m in EMAIL_RE.finditer(text):
-            if m.group(0).lower().endswith(SAFE_EMAIL_DOMAINS):
+            # 域必须精确相等：endswith 判定会让任何以白名单域结尾的伪造域绕过检查
+            if m.group(0).rpartition("@")[2].lower() in SAFE_EMAIL_DOMAINS:
                 continue
             hits.append(f"{rel(path)}：邮箱 {m.group(0)}")
         for m in USER_PATH_RE.finditer(text):

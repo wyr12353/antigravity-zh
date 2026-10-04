@@ -9,7 +9,14 @@
   if (process.__AGZH_LOADED__) return;
   process.__AGZH_LOADED__ = true;
 
-  var MENUS = __AGZH_MENUS__;
+  // MENUS 的查找走 [] 会命中 Object.prototype（"constructor" 等键恒真，
+  // 会把菜单标签替换成函数源码），包装成无原型对象
+  function nullProto(o) {
+    var r = Object.create(null);
+    for (var k in o) r[k] = o[k];
+    return r;
+  }
+  var MENUS = nullProto(__AGZH_MENUS__);
   var SCAN = __AGZH_SCAN__;
 
   try {
@@ -57,53 +64,50 @@
     try {
       var fs = require("fs");
       var path = require("path");
+      var electron = require("electron");
       var OUT = "__AGZH_COLLECTOR_FILE__";
       var buffer = new Map();
-      var writing = false;
-      var dirty = false;
 
-      // 落盘串行化 + 原子替换。
-      // 多条 IPC 批可能同时在飞（多窗口），无锁的 read-modify-write 会让后写者
-      // 覆盖前者、静默丢数据；直接覆盖目标文件也可能被读到半截 JSON。
+      // 读→合→原子写。三条注意：
+      // 1) buffer.clear() 必须放在 renameSync 成功之后——写失败（目标被外部占用
+      //    是常态，这个文件本来就设计给外部读）时保留批次下次重试；重试不会把
+      //    count 双计，因为 existing 每次都从盘上重建。
+      // 2) 旧文件读不出来分两种：ENOENT 是首次落盘（正常）；其它（损坏/被锁）
+      //    绝不能拿"仅本批"的内容覆盖写，否则历史积累会被整体抹掉。
+      // 3) 临时文件带 pid，多实例同 scan 时不会互踩半截 JSON。
       var writeNow = function () {
-        if (writing) { dirty = true; return; }
-        writing = true;
-        dirty = false;
+        var existing = new Map();
         try {
-          var existing = new Map();
-          try {
-            var prev = JSON.parse(fs.readFileSync(OUT, "utf-8"));
-            if (prev && prev.strings) {
-              prev.strings.forEach(function (s) { existing.set(s.text, s); });
-            }
-          } catch (e) { /* 首次无文件 */ }
-
-          buffer.forEach(function (rec, text) {
-            var hit = existing.get(text);
-            if (hit) {
-              hit.count += rec.count;
-              if (!hit.path && rec.path) hit.path = rec.path;
-            } else {
-              existing.set(text, { text: text, count: rec.count, path: rec.path || "" });
-            }
-          });
-          buffer.clear();
-
-          var arr = [];
-          existing.forEach(function (v) { arr.push(v); });
-          arr.sort(function (a, b) { return b.count - a.count; });
-
-          fs.mkdirSync(path.dirname(OUT), { recursive: true });
-          // 临时文件名带上 pid：多实例同时 scan 时不会互相覆盖（writing 锁只管进程内）
-          var tmp = OUT + "." + process.pid + ".tmp";
-          fs.writeFileSync(tmp, JSON.stringify({ strings: arr }, null, 2), "utf-8");
-          fs.renameSync(tmp, OUT);
+          var prev = JSON.parse(fs.readFileSync(OUT, "utf-8"));
+          if (prev && prev.strings) {
+            prev.strings.forEach(function (s) { existing.set(s.text, s); });
+          }
         } catch (e) {
-          console.error("[agzh] collector write failed:", e);
-        } finally {
-          writing = false;
-          if (dirty) writeNow();
+          if (e.code !== "ENOENT") {
+            console.error("[agzh] collector: 现有数据不可读，本轮放弃写盘:", e);
+            return;
+          }
         }
+
+        buffer.forEach(function (rec, text) {
+          var hit = existing.get(text);
+          if (hit) {
+            hit.count += rec.count;
+            if (!hit.path && rec.path) hit.path = rec.path;
+          } else {
+            existing.set(text, { text: text, count: rec.count, path: rec.path || "" });
+          }
+        });
+
+        var arr = [];
+        existing.forEach(function (v) { arr.push(v); });
+        arr.sort(function (a, b) { return b.count - a.count; });
+
+        fs.mkdirSync(path.dirname(OUT), { recursive: true });
+        var tmp = OUT + "." + process.pid + ".tmp";
+        fs.writeFileSync(tmp, JSON.stringify({ strings: arr }, null, 2), "utf-8");
+        fs.renameSync(tmp, OUT);
+        buffer.clear();   // 写盘成功才清空，失败保留批次重试
       };
 
       electron.ipcMain.on("agzh:collector", function (event, batch) {
@@ -126,8 +130,10 @@
         if (event && "returnValue" in event) event.returnValue = true;
       });
 
-      process.on("before-quit", writeNow);
-      process.on("exit", writeNow);   // 退出路径再兜一次
+      // "before-quit" 是 Electron app 的事件，Node 的 process 上并不存在，
+      // 挂在 process 上永远不会触发；exit 兜底仍保留在正常退出路径生效
+      if (electron.app && electron.app.on) electron.app.on("before-quit", writeNow);
+      process.on("exit", writeNow);
     } catch (e) {
       console.error("[agzh] collector sink failed:", e);
     }

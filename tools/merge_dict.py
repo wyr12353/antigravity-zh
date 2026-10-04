@@ -21,7 +21,7 @@ for _stream in (sys.stdout, sys.stderr):
             pass
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from scan_filter import is_noise  # noqa: E402
+from scan_filter import clean  # noqa: E402
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 OUT_FILE = PROJECT_DIR / "out" / "untranslated.json"

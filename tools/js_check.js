@@ -8,29 +8,30 @@
 const fs = require("fs");
 const path = require("path");
 
-const data = JSON.parse(fs.readFileSync("out/_js_check_data.json", "utf-8"));
+const dataFile = path.join(__dirname, "..", "out", "_js_check_data.json");
+const data = JSON.parse(fs.readFileSync(dataFile, "utf-8"));
 const runtimeFile = path.join(__dirname, "..", "inject", "zh_runtime.js");
 const src = fs.readFileSync(runtimeFile, "utf-8");
 
-// 截取"辅助函数 + 全部规则表 + translateText"整段，到 DOM 遍历部分为止。
-const START = "  function durationZh";
+// 从数据占位符的初始化一路截到 DOM 遍历之前：nullProto、CJK_RE、SKIP_SEL、
+// 收集器（SCAN=false 时是死码但语法完整）、全部规则表与 translateText 都来自
+// 真实源文件，本文件不再复刻任何一段逻辑。
+const START = "  var EXACT = nullProto(__AGZH_EXACT__);";
 const END = "  function inSkipZone";
 const start = src.indexOf(START);
 const end = src.indexOf(END);
-if (start < 0 || end < 0) {
+if (start < 0 || end < 0 || end <= start) {
   console.error("[失败] 无法从 zh_runtime.js 截取翻译实现（代码结构可能已变）");
   process.exit(2);
 }
 
-// 补齐切片之外的依赖：引擎顶部的作用域变量，以及 patcher 注入的数据占位符。
+// 补齐切片之外唯一的依赖：patcher 注入的数据占位符本身。
 const prelude = [
-  "var EXACT = " + JSON.stringify(data.exact || {}) + ";",
-  "var WORDS = " + JSON.stringify(data.words || {}) + ";",
-  "var PREFIX_RULES = " + JSON.stringify(data.prefix || []) + ";",
+  "var __AGZH_EXACT__ = " + JSON.stringify(data.exact || {}) + ";",
+  "var __AGZH_WORDS__ = " + JSON.stringify(data.words || {}) + ";",
+  "var __AGZH_PREFIX_RULES__ = " + JSON.stringify(data.prefix || []) + ";",
   "var __AGZH_TEMPLATE_RULES__ = " + JSON.stringify(data.template || []) + ";",
-  "var CJK_RE = /[\\u4e00-\\u9fff\\u3400-\\u4dbf]/;",
-  "var SCAN = false;",                       // 关掉收集器，不产生副作用
-  "var collector = { miss: function () {} };",
+  "var __AGZH_SCAN__ = false;",              // 关掉收集器，不产生副作用
 ].join("\n");
 
 const translate = new Function(
