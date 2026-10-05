@@ -77,6 +77,29 @@ jobs:
           Copy-Item -Recurse dict package\dict
           Compress-Archive -Path package\* -DestinationPath dist\antigravity-zh-with-dict.zip
 
+      # 这类工具会被杀软盯上，用户需要能验证下载完整性；checksum 与产物同发
+      - name: 生成 SHA256 校验和
+        shell: pwsh
+        run: |
+          Get-FileHash dist\antigravity-zh.exe, dist\antigravity-zh-with-dict.zip -Algorithm SHA256 |
+            ForEach-Object { '{0}  {1}' -f $_.Hash.ToLower(), ($_.Path -replace '^.*\\', '') } |
+            Out-File -Encoding ascii dist\SHA256SUMS.txt
+          Get-Content dist\SHA256SUMS.txt
+
+      # Release 说明的第一行写清适配的客户端版本：tag 即客户端版本，
+      # 第四位补丁号表示工具自身的修复版本（见 README 的发版约定）
+      - name: 生成 Release 兼容范围说明
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'.TrimStart('v')
+          $parts = $tag.Split('.')
+          $client = if ($parts.Count -ge 3) { $parts[0..2] -join '.' } else { $tag }
+          "适配 Antigravity 客户端 $client。" |
+            Out-File -Encoding utf8 release-notes.md
+          "tag 中的第四位补丁号表示工具自身的修复版本；客户端更新后请到 Releases 页获取对应新版本。" |
+            Out-File -Append -Encoding utf8 release-notes.md
+
       - name: 上传产物
         uses: actions/upload-artifact@v7
         with:
@@ -84,6 +107,7 @@ jobs:
           path: |
             dist/antigravity-zh.exe
             dist/antigravity-zh-with-dict.zip
+            dist/SHA256SUMS.txt
 
       - name: 发布 Release（仅打 tag 时）
         if: startsWith(github.ref, 'refs/tags/')
@@ -91,6 +115,8 @@ jobs:
         with:
           # 按 commit 自动生成发布说明，省得每次手写
           generate_release_notes: true
+          body_path: release-notes.md
           files: |
             dist/antigravity-zh.exe
             dist/antigravity-zh-with-dict.zip
+            dist/SHA256SUMS.txt

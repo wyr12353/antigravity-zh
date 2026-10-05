@@ -76,6 +76,15 @@ pyinstaller -F --noupx --name antigravity-zh --add-data "inject;inject" --add-da
 产物是 `dist\antigravity-zh.exe`；`build\` 与 `antigravity-zh.spec` 是中间文件，
 两者都已被 `.gitignore` 忽略，可以随手删掉。
 
+### 发版约定
+
+- **tag 跟随 Antigravity 客户端版本**：`v2.19.1` 表示适配客户端 2.19.1；
+- **工具自身的修复用第四位补丁号**：`v2.19.1.1` 表示客户端版本不变、仅工具修复；
+  客户端没更新也可以发版；
+- 打 tag 并推送后 CI 自动构建 exe 并发布 Release（附 `SHA256SUMS.txt` 校验和），
+  无需手动上传任何产物；
+- Release 说明第一行是该版本适配的客户端版本范围（由 CI 依据 tag 自动生成）。
+
 ## 快速上手
 
 ```bash
