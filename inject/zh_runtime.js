@@ -234,6 +234,13 @@
       // 后面常紧跟 "It requires X to be installed."，一并处理掉
       return requiresZh(t.replace(/Configure the browser subagent\.?/g, "配置浏览器子智能体。"));
     }],
+    // 设置页里 "Google Chrome" 是链接，把 "It requires Google Chrome to be
+    // installed." 拆成多个文本节点：前段由词典整段翻译（"配置浏览器子智能体。
+    // 需要安装"），链接保持，链接后的尾巴单独成节点——翻成中文句号收尾。
+    // 边界检查保证完整句子（"There are 2 extensions to be installed."）不受影响。
+    ["to be installed.", function (t) {
+      return /^\s*to be installed\.\s*$/.test(t) ? "。" : t;
+    }],
     ["It requires", requiresZh],
     ["The browser subagent can be invoked by typing", function (t) {
       return t.replace(/The browser subagent can be invoked by typing \/browser in the conversation input box\./g, "您可以在对话输入框中输入 /browser 来调用浏览器子智能体。");
