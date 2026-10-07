@@ -53,17 +53,20 @@ def _resource_dir(name):
     PyInstaller 打包后内嵌资源被解压到 sys._MEIPASS；若 exe 同级目录放了
     inject/ 或 dict/，优先用它——这样 exe 用户依然能自行增删词典，
     而不用重新打包。
+
+    资源缺失时返回 None 而不是抛错：本函数在导入期被调用，那里 raise
+    SystemExit 会让双击场景的报错窗口一闪而过；由 main() 入口的
+    ensure_resources() 统一检查并停留窗口。
     """
     if getattr(sys, "frozen", False):
         beside = Path(sys.executable).resolve().parent / name
         if beside.is_dir():
             return beside
         embedded = Path(getattr(sys, "_MEIPASS", PROJECT_DIR)) / name
-        if not embedded.is_dir():
-            # 最常见的原因是杀软把自解压目录里的文件当威胁隔离了
-            raise SystemExit(f"[错误] 找不到内嵌资源 {name}/（exe 同级与解压目录都没有）。\n"
-                             "        可能被杀毒软件隔离，请重新解压或将本程序加入白名单。")
-        return embedded
+        if embedded.is_dir():
+            return embedded
+        # 最常见的原因是杀软把自解压目录里的文件当威胁隔离了
+        return None
     return PROJECT_DIR / name
 
 
@@ -99,12 +102,25 @@ OUT_DIR = _output_dir()
 # 复用 tools/scan_filter.py 的噪声判定（打包时随 --add-data 一起内嵌；
 # 缺失时退回"白名单"式的保守判定，不让 missing 直接崩掉）。
 try:
-    sys.path.insert(0, str(_resource_dir("tools")))
+    _tools_dir = _resource_dir("tools")
+    sys.path.insert(0, str(_tools_dir)) if _tools_dir else None
     from scan_filter import is_noise as _is_noise
 except Exception:
     # 不只 ImportError：scan_filter.py 若有语法/名字错误也会走到这里。
     # 降级为"不做噪声过滤"，而不是让 patcher 在导入期直接崩掉。
     _is_noise = None
+
+
+def ensure_resources():
+    """main() 入口先调用：资源目录缺失时给出可读提示并停留窗口。
+
+    缺失的典型原因是杀软把 PyInstaller 自解压目录里的文件当威胁隔离了——
+    若在导入期抛出，双击场景下提示会一闪而过，用户根本看不到。
+    """
+    missing = [n for n, d in (("inject", INJECT_DIR), ("dict", DICT_DIR)) if d is None]
+    if missing:
+        raise SystemExit(f"[错误] 找不到内嵌资源 {', '.join(missing)}/（exe 同级与解压目录都没有）。\n"
+                         "        可能被杀毒软件隔离，请重新解压或将本程序加入白名单。")
 
 DEFAULT_INSTALL = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "antigravity"
 
@@ -251,7 +267,25 @@ def read_version(source):
 #
 # 这两个名字并非 Antigravity 独有，按映像名全系统 taskkill 会误杀第三方同名
 # 进程，所以伴生进程只在确认其可执行路径位于本安装目录之后才结束。
-COMPANION_PROCESSES = ("language_server.exe", "webm_encoder.exe")
+# （PS 脚本里的进程名列表由本常量生成，两处调用不会各自漂移。）
+COMPANION_PROCESSES = ("language_server", "webm_encoder")
+
+
+def _ps_quote(s):
+    """PowerShell 单引号字符串的转义（路径含 O'Brien 这类撇号时必须双写）。"""
+    return "'" + str(s).replace("'", "''") + "'"
+
+
+def _companion_ps_script(install, action):
+    """生成伴生进程的 PS 过滤脚本：按可执行路径前缀（封口到目录分隔符）过滤。
+
+    前缀必须以 \\ 结尾再比较，否则 antigravity-nightly 这类同前缀兄弟目录
+    的同名进程会被误杀/误报。
+    """
+    names = ", ".join(COMPANION_PROCESSES)
+    prefix = _ps_quote(str(install).rstrip("\\") + "\\")
+    return ("Get-Process " + names + " -ErrorAction SilentlyContinue | "
+            "Where-Object { $_.Path -and $_.Path.StartsWith(" + prefix + ") } | " + action)
 
 
 def running_processes():
@@ -262,25 +296,22 @@ def running_processes():
     """
     # tasklist 在中文 Windows 上输出 GBK，这里只按字节匹配进程名，避免解码问题
     try:
-        result = subprocess.run(["tasklist"], capture_output=True, check=False)
-    except OSError:
+        result = subprocess.run(["tasklist"], capture_output=True, check=False, timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
         return []
     return ["Antigravity.exe"] if b"Antigravity.exe" in (result.stdout or b"") else []
 
 
 def companion_left(install):
     """返回仍在本安装目录下运行的伴生进程名（按可执行路径过滤）。"""
-    script = ("Get-Process language_server, webm_encoder -ErrorAction SilentlyContinue | "
-              "Where-Object { $_.Path -and $_.Path.StartsWith('" + str(install) + "') } | "
-              "ForEach-Object { $_.ProcessName + '.exe' }")
+    script = (_companion_ps_script(install, "ForEach-Object { $_.ProcessName + '.exe' }"))
     try:
         result = subprocess.run(["powershell", "-NoProfile", "-Command", script],
                                 capture_output=True, check=False, timeout=30)
         out = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
     except (OSError, subprocess.TimeoutExpired):
         return []          # PowerShell 不可用时按"无伴生进程"处理，后续 _retry 兜底
-    return sorted({line.strip() + (".exe" if not line.strip().endswith(".exe") else "")
-                   for line in out.splitlines() if line.strip()})
+    return sorted({line.strip() + ".exe" for line in out.splitlines() if line.strip()})
 
 
 def _retry(func, attempts=5, delay=0.6):
@@ -298,14 +329,12 @@ def _retry(func, attempts=5, delay=0.6):
     raise last
 
 
-def ensure_closed(auto_yes, install=None):
+def ensure_closed(auto_yes, install):
     """结束 Antigravity 及其伴生进程。
 
-    install 用于伴生进程的路径过滤（支持 --dir 自定义安装目录）；
-    未提供时退回默认安装目录。
+    install 用于伴生进程的路径过滤（支持 --dir 自定义安装目录）。
     """
-    target = Path(install) if install else (
-        Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "antigravity")
+    target = Path(install)
     running = running_processes()
     companions = companion_left(target)
     if not running and not companions:
@@ -325,9 +354,7 @@ def ensure_closed(auto_yes, install=None):
     # 它们没有可点的退出入口，只杀主进程会让用户卡在"仍有进程未退出"。
     subprocess.run(["taskkill", "/F", "/IM", "Antigravity.exe"],
                    capture_output=True, check=False)
-    ps = ("Get-Process language_server, webm_encoder -ErrorAction SilentlyContinue | "
-          "Where-Object { $_.Path -and $_.Path.StartsWith('" + str(target) + "') } | "
-          "Stop-Process -Force")
+    ps = _companion_ps_script(target, "Stop-Process -Force")
     subprocess.run(["powershell", "-NoProfile", "-Command", ps],
                    capture_output=True, check=False)
     # 等最多 10 秒让句柄释放。超时不中止：真正锁住 resources/app 的是主进程，
@@ -423,6 +450,10 @@ def inject_block(app_dir, rel_path, block, marker, label):
 
     返回是否注入成功。注入失败却照旧写"已汉化"标记是最坏的情况：
     界面全英文，而 status 报告一切正常。
+
+    "热更新"分支当前不可达（do_patch 注入前总是 rmtree + 全新解包，解出的
+    文件不可能已含 marker），保留作防御：万一未来恢复"不重建只更新"的
+    快速路径，热更新语义是现成的。
     """
     file_path = app_dir / rel_path
     if not file_path.exists():
@@ -508,7 +539,13 @@ def do_patch(install, scan, auto_yes, launch):
     # 3. 并入 app.asar.unpacked（native 模块等不在 asar 内的文件）
     unpacked = install / UNPACKED_REL
     if unpacked.exists():
-        shutil.copytree(unpacked, app_dir, dirs_exist_ok=True)
+        try:
+            shutil.copytree(unpacked, app_dir, dirs_exist_ok=True)
+        except OSError as e:
+            # 与相邻步骤同等对待：给出可执行的恢复路径
+            raise SystemExit(
+                f"[错误] 并入 app.asar.unpacked 失败：{e}\n"
+                f"        {APP_REL} 现在是不完整状态，请运行 python patcher.py restore 还原官方原版。")
         print("[完成] 并入 app.asar.unpacked 内容")
 
     # 4. 注入
@@ -561,9 +598,14 @@ def do_patch(install, scan, auto_yes, launch):
     }
     marker_file = app_dir / MARKER_NAME
     tmp_marker = marker_file.with_suffix(".json.tmp")
-    tmp_marker.write_text(
-        json.dumps(marker, ensure_ascii=False, indent=2), encoding="utf-8")
-    os.replace(tmp_marker, marker_file)
+    try:
+        tmp_marker.write_text(
+            json.dumps(marker, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(tmp_marker, marker_file)
+    except OSError as e:
+        # 补丁本体已经生效，只是 status 会误报"未汉化"——提示出来而不是抛栈
+        print(f"[提示] 补丁标记写入失败（{e}）：补丁已生效，但 status 会显示未汉化。"
+              "可手动删除 resources/app 后重跑 patch。")
 
     print(f"[完成] {'scan' if scan else 'patch'} 补丁完成（基于 v{version}）。")
     if scan:
@@ -879,6 +921,7 @@ def main():
             args.command, args.yes, args.launch = "patch", True, True
 
         install = find_install(args.dir)
+        ensure_resources()   # 内嵌资源缺失（杀软隔离）时停留窗口给出提示
         if args.command == "patch":
             do_patch(install, scan=False, auto_yes=args.yes, launch=args.launch)
         elif args.command == "scan":
@@ -907,7 +950,9 @@ def main():
         if "args" in locals() and getattr(args, "debug", False):
             raise                    # --debug 时保留完整 traceback，便于定位
         print(f"[错误] 执行失败：{e}")
-        if oneclick:
+        # frozen 下带子命令（antigravity-zh.exe status）经快捷方式启动时同样
+        # 会有窗口闪退问题，与 oneclick 一致地停留
+        if oneclick or getattr(sys, "frozen", False):
             _pause()
         return 1
 

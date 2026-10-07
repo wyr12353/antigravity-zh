@@ -103,10 +103,20 @@
         existing.forEach(function (v) { arr.push(v); });
         arr.sort(function (a, b) { return b.count - a.count; });
 
-        fs.mkdirSync(path.dirname(OUT), { recursive: true });
+        // 写盘段单独兜底：目标文件设计上就供外部进程读取，Windows 上外部读者
+        // 未开 FILE_SHARE_DELETE 时 renameSync 抛 EPERM 是常态。异常从 ipcMain
+        // 监听器抛出会成为主进程未捕获异常，sendSync 期间还可能挂死渲染进程——
+        // 必须在这里吞掉。失败时保留 buffer 下次重试，并清理残留的 tmp。
         var tmp = OUT + "." + process.pid + ".tmp";
-        fs.writeFileSync(tmp, JSON.stringify({ strings: arr }, null, 2), "utf-8");
-        fs.renameSync(tmp, OUT);
+        try {
+          fs.mkdirSync(path.dirname(OUT), { recursive: true });
+          fs.writeFileSync(tmp, JSON.stringify({ strings: arr }, null, 2), "utf-8");
+          fs.renameSync(tmp, OUT);
+        } catch (e) {
+          console.error("[agzh] collector: 写盘失败，批次保留待重试:", e);
+          try { fs.unlinkSync(tmp); } catch (e2) { /* tmp 可能尚未创建 */ }
+          return;   // buffer 不清空
+        }
         buffer.clear();   // 写盘成功才清空，失败保留批次重试
       };
 

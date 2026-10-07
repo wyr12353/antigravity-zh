@@ -34,14 +34,19 @@ class Asar:
         # 单句柄：先读 header 再保留同一个文件对象，省一次 open，
         # 也消除两次 open 之间文件被替换的理论窗口
         self._f = self.path.open("rb")
-        head = self._f.read(16)
-        if len(head) != 16:
+        try:
+            head = self._f.read(16)
+            if len(head) != 16:
+                raise AsarError(f"文件太小，不是 asar: {path}")
+            _magic, header_pickle_size, _u1, json_size = struct.unpack("<4I", head)
+            self.header = json.loads(self._f.read(json_size).decode("utf-8"))
+            # 内容区起始 = 前 8 字节 + 头部 pickle 总长（与 MIMICTE 同款算法，已实测验证）
+            self.base_offset = 8 + header_pickle_size
+        except Exception:
+            # header 解析失败时显式关句柄再抛：Windows 上占着 app.asar
+            # 会干扰调用方后续的 os.replace / 重试
             self._f.close()
-            raise AsarError(f"文件太小，不是 asar: {path}")
-        _magic, header_pickle_size, _u1, json_size = struct.unpack("<4I", head)
-        self.header = json.loads(self._f.read(json_size).decode("utf-8"))
-        # 内容区起始 = 前 8 字节 + 头部 pickle 总长（与 MIMICTE 同款算法，已实测验证）
-        self.base_offset = 8 + header_pickle_size
+            raise
 
     def close(self):
         self._f.close()
@@ -99,6 +104,10 @@ class Asar:
             size = int(info["size"])
             self._f.seek(self.base_offset + int(info["offset"]))
             data = self._f.read(size)
+            if len(data) != size:
+                # 截断/损坏的 asar 会少读——静默写出截断文件会让应用损坏且无报错
+                raise AsarError(
+                    f"文件内容不完整: {name}（期望 {size} 字节，实际读到 {len(data)}）")
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(data)
             count += 1

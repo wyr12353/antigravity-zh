@@ -87,12 +87,15 @@ jobs:
           Get-Content dist\SHA256SUMS.txt
 
       # Release 说明的第一行写清适配的客户端版本：tag 即客户端版本，
-      # 第四位补丁号表示工具自身的修复版本（见 README 的发版约定）
+      # 第四位补丁号表示工具自身的修复版本（见 README 的发版约定）。
+      # ref_name 经 env 传入而不直接内插脚本，收敛注入面。
       - name: 生成 Release 兼容范围说明
         if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
+        env:
+          TAG_NAME: ${{ github.ref_name }}
         run: |
-          $tag = '${{ github.ref_name }}'.TrimStart('v')
+          $tag = $env:TAG_NAME.TrimStart('v')
           $parts = $tag.Split('.')
           $client = if ($parts.Count -ge 3) { $parts[0..2] -join '.' } else { $tag }
           "适配 Antigravity 客户端 $client。" |

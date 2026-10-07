@@ -34,10 +34,6 @@
       "插件是技能和 MCP 的打包集合，用于帮助 "
     ],
     [
-      "Plugins are packaged collections of skills and MCPs",
-      "插件是技能和 MCP 的打包集合，用于帮助 "
-    ],
-    [
       "work with Google developer products. You can always change your choices in Settings.",
       " 中的智能体与 Google 开发者产品协同工作。您可以随时在“设置”中更改您的选择。"
     ],
@@ -330,10 +326,6 @@
       "请在应用设置中开启“远程控制”。"
     ],
     [
-      "Try Remote Control",
-      "尝试远程控制"
-    ],
-    [
       "Agent execution terminated due to error",
       "智能体执行因错误而终止。"
     ],
@@ -372,14 +364,6 @@
     [
       "You can prompt the model to try again",
       "您可以提示模型重试，或者如果错误仍然存在，可以开启新的对话。"
-    ],
-    [
-      "for more help",
-      " 以获取更多帮助。"
-    ],
-    [
-      "See our",
-      "查看我们的 "
     ]
   ]
 }

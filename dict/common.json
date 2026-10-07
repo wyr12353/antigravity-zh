@@ -27,7 +27,7 @@
     "Advanced Settings": "高级设置",
     "Agent Behavior": "智能体行为",
     "Agent Settings": "智能体设置",
-    "Agent execution terminated due to error": "智能体执行因错误而终止",
+    "Agent execution terminated due to error": "智能体执行因错误而终止。",
     "Agent execution terminated due to error.": "智能体执行因错误而终止。",
     "Agent is thinking...": "智能体正在思考...",
     "Agent settings and permissions for conversations outside of projects.": "针对项目外对话的智能体设置和权限。",
@@ -524,7 +524,7 @@
     "Tools": "工具",
     "Try Remote Control": "尝试远程控制",
     "Turbo mode": "极速模式",
-    "Turn on Remote Control in app settings": "请在应用设置中开启“远程控制”",
+    "Turn on Remote Control in app settings": "请在应用设置中开启“远程控制”。",
     "Turn on Remote Control in app settings.": "请在应用设置中开启“远程控制”。",
     "Typeahead menu": "预输入菜单",
     "Undo changes": "撤销更改",
@@ -556,6 +556,7 @@
     "Wide": "较宽",
     "Window": "窗口",
     "Work with local agents from another device.": "在其他设备上与本地智能体协同工作。",
+    "Working Directory:": "工作目录：",
     "Working.": "运行中。",
     "Working...": "运行中...",
     "Workspace": "工作区",
@@ -575,6 +576,7 @@
     "conversation": "对话",
     "e.g., curl": "例如：curl",
     "e.g., npm test": "例如：npm test",
+    "failed": "已失败",
     "folders": "文件夹",
     "for more help": "以获取更多帮助",
     "for more help.": "以获取更多帮助。",
@@ -591,8 +593,7 @@
     "troubleshooting guide": "排查指南",
     "weekly": "每周",
     "when working in this project.": "（当在此项目中工作时）。",
-    "workspace": "工作区",
-    "Working Directory:": "工作目录："
+    "workspace": "工作区"
   },
   "words": {
     "add": "添加",

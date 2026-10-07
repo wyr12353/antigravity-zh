@@ -1,6 +1,6 @@
 {
-  "_source": "antigravity-zh 自维护：v2.19.1 批量补译（由 out/missing.json 的 ui 候选逐条核对）",
   "_note": "键为英文原文、值为中文。文件名排在 ui_extra.json 之后，因此同名键以本文件为准。（早期按候选区间拆成 4 个分片维护，已合并到此文件。）",
+  "_source": "antigravity-zh 自维护：v2.19.1 批量补译（由 out/missing.json 的 ui 候选逐条核对）",
   "exact": {
     "A chunk is a section of the page. Long pages are chunked so that only the sections that are relevant to your query are read.": "一个分块是页面的一部分。长页面会被分块，以便只读取与您的查询相关的部分。",
     "A new version is available.": "有新版本可用。",
@@ -49,7 +49,7 @@
     "Async refinement encountered during synchronous parse operation. Use .parseAsync instead.": "在同步解析操作中遇到了异步细化。请改用 .parseAsync。",
     "Async validation not supported": "不支持异步校验",
     "Asynchronous transform encountered during synchronous parse operation. Use .parseAsync instead.": "在同步解析操作中遇到了异步转换。请改用 .parseAsync。",
-    "At mention code block": "在提及代码块时",
+    "At mention code block": "以 @ 提及代码块",
     "Attach the trajectory ID to the feedback form": "将执行轨迹 ID 附加到反馈表单",
     "Attaching logs requires an email address": "附加日志需要电子邮件地址",
     "Attempted to dispose unknown listener": "尝试释放未知的监听器",

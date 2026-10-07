@@ -92,6 +92,8 @@ RULE_CASES = [
     ("Configure the browser subagent.", "配置浏览器子智能体。"),
     # 捕获段含逗号：早先字符类缺逗号时后半段留在英文里
     ("Worked for 2 hours, 30 minutes", "运行耗时 2小时, 30分钟"),
+    # 交替表补天/周单位后：天级耗时不再半翻译
+    ("Worked for 3 days", "运行耗时 3天"),
 ]
 
 problems = []
@@ -247,6 +249,13 @@ def check_dicts():
             for key, val in data.get(section, {}).items():
                 if not val:
                     fail(f"{path.name} {section} 键 {key!r} 译值为空——运行时按真值判断，空串词条不生效")
+        # $ 特殊序列：EXACT/WORDS 译文经 String.replace 注入，$&/$`/$' 会被
+        # 替换语义解释（template 里的 $n 是有意用法，不在此列）
+        for section in ("exact", "words"):
+            for key, val in data.get(section, {}).items():
+                if val and re.search(r"[$][&`']", val):
+                    print(f"  [提示] {path.name} {section} 键 {key!r} 译值含 $&/$`/$'——"
+                          "运行时会被 String.replace 解释，确认这是有意的吗？")
         for section in ("exact", "words", "menus"):
             for key in data.get(section, {}):
                 first = origin.setdefault((section, key), path.name)
@@ -343,7 +352,9 @@ def check_runtime_rules():
         # 规则表由 patcher 注入，这里给空桩
         "var __AGZH_TEMPLATE_RULES__ = [];\n"
         "var __AGZH_PREFIX_RULES__ = [];\n"
-        "var EXACT = {};\n"
+        # 桩对齐运行时形态：EXACT 在运行时经 nullProto 包装为无原型对象，
+        # 桩若用 {} 会让 "constructor" 这类键恒真——测试态与运行态不同
+        "var EXACT = Object.create(null);\n"
         "var WORDS = {};\n" + block + "\n"
         "var CASES = " + json.dumps(RULE_CASES, ensure_ascii=False) + ";\n"
         "var fails = [];\n"

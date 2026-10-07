@@ -67,7 +67,7 @@
     ["Your credentials (gcert) are currently valid, but you can renew them if needed:", "您的凭据 (gcert) 目前有效，如有需要可以续期："],
     ["The server returned no conversation to fork into.", "服务器未返回可供创建分叉的对话。"],
     ["Add New Handler to Code Actions", "向 Code Actions 添加新处理器"],
-    ["Your Plan: Pro", "您的套餐: Pro"],
+    ["Your Plan: Pro", "当前计划： Pro"],
     ["This will permanently delete the workspace", "这将永久删除 the workspace"],
     ["Switch to the terminal", "切换到 terminal"],
     ["Select Environment (Staging)", "选择环境（Staging）"],

@@ -146,7 +146,7 @@
   // 缩写（min/sec/hr）不能漏：单位表里若只有 minutes?，"2 mins" 会整体不匹配、原样留在界面上。
   function elapsedZh(s) {
     return s.replace(
-      /(\d+(?:\.\d+)?)\s*(ms|milliseconds?|secs?|seconds?|s|mins?|minutes?|m|hrs?|hours?|h)\b/gi,
+      /(\d+(?:\.\d+)?)\s*(ms|milliseconds?|weeks?|secs?|seconds?|s|mins?|minutes?|m|hrs?|hours?|days?|d|h)\b/gi,
       function (_, num, unit) {
         var u = unit.toLowerCase();
         // 全称（minutes/seconds/hours）先于缩写判断——早先 indexOf("min") === 0
@@ -155,6 +155,9 @@
                : u === "s" || u.indexOf("sec") === 0 ? "秒"
                : u.indexOf("minute") === 0 ? "分钟"
                : u === "m" || u.indexOf("min") === 0 ? "分"
+               : u.indexOf("hour") === 0 ? "小时"
+               : u.indexOf("day") === 0 || u === "d" ? "天"
+               : u.indexOf("week") === 0 ? "周"
                : "小时";
         return num + zh;
       });
@@ -162,10 +165,12 @@
   // "Worked for 1.2s" / "Thought for 45 sec" → 运行/思考耗时。
   // 这是界面性信息，但渲染在对话消息流（role=article，已整体跳过）的折叠条上，
   // 所以除了常规 SUBSTR 路径，processNode 的跳过区分支也会调用本函数。
+  // 捕获段必须以数字开头：正文里 "Worked for me, thanks" 这类文本不是时间戳，
+  // 不能因为前缀相同就被改写（i 标志下字符类含全部字母，靠 \\d 卡住）。
   function elapsedTranslate(t) {
     return t
-      .replace(/Worked for ([\d.a-z, ]+)/gi, function (_, ts) { return "运行耗时 " + elapsedZh(ts); })
-      .replace(/Thought for ([\d.a-z, ]+)/gi, function (_, ts) { return "思考耗时 " + elapsedZh(ts); });
+      .replace(/Worked for (\d[\d.a-z, ]*)/gi, function (_, ts) { return "运行耗时 " + elapsedZh(ts); })
+      .replace(/Thought for (\d[\d.a-z, ]*)/gi, function (_, ts) { return "思考耗时 " + elapsedZh(ts); });
   }
 
   // ---------- 规则表：整句模板 ----------
@@ -308,6 +313,21 @@
     return false;
   }
 
+  // 最近命中的跳过区是否为对话消息流（role=article）。
+  // 耗时时间戳的白名单只对它开放：pre/code/textarea/contenteditable 的
+  // 最近命中是自身（非 article），不会因这个白名单重新暴露给翻译。
+  function inArticleZone(el) {
+    if (!el) return false;
+    try {
+      var zone = el.closest ? el.closest(SKIP_SEL) : null;
+      return !!(zone && zone.getAttribute && zone.getAttribute("role") === "article");
+    } catch (e) {}
+    return false;
+  }
+
+  // title/aria-label/alt/data-tooltip 的 get→translate→set 同一模式
+  var TRANSLATED_ATTRS = ["title", "aria-label", "alt", "data-tooltip"];
+
   function processElement(el) {
     // 属性（placeholder / title / aria-label / alt / data-tooltip）始终翻译，
     // **包括处于跳过区的元素**。跳过区要保护的是"代码与正文内容"，
@@ -322,10 +342,8 @@
       var p = translateText(el.placeholder, el);
       if (p !== el.placeholder) el.placeholder = p;
     }
-    // title/aria-label/alt/data-tooltip 是 get→translate→set 的同一模式，收敛成表
-    var ATTRS = ["title", "aria-label", "alt", "data-tooltip"];
-    for (var ai = 0; ai < ATTRS.length; ai++) {
-      var attrName = ATTRS[ai];
+    for (var ai = 0; ai < TRANSLATED_ATTRS.length; ai++) {
+      var attrName = TRANSLATED_ATTRS[ai];
       var attrVal = el.getAttribute ? el.getAttribute(attrName) : null;
       if (attrVal) {
         var attrZh = translateText(attrVal, el);
@@ -338,8 +356,18 @@
       if (v !== el.value) el.value = v;
     }
 
-    // 属性处理完毕；跳过区内的元素不再递归处理文本与子节点
-    if (skip) return;
+    // 属性处理完毕；跳过区内的元素不再递归处理文本与子节点。
+    // 例外：消息流（article）内的控件——复制/重试按钮等——同样是控件，
+    // 它们的 title/aria-label 也要翻。递归子元素时子元素 skip 仍为真，
+    // 只会走到属性段后再次进入本分支，天然只翻属性、绝不碰文本；
+    // monaco/contenteditable 的最近命中是自身而非 article，不递归。
+    if (skip) {
+      if (inArticleZone(el)) {
+        var zoneKids = el.children;
+        for (var zc = 0; zc < zoneKids.length; zc++) processElement(zoneKids[zc]);
+      }
+      return;
+    }
 
     // 容器级拼接匹配：直接子节点全是纯文本节点且整体命中词典时折叠替换
     // （严格仅处理纯文本节点，绝对不破坏子元素span上的字号与样式类名）
@@ -365,12 +393,16 @@
     if (node.nodeType === 3) { // TEXT_NODE
       var parent = node.parentElement || node.parentNode;
       if (parent && inSkipZone(parent)) {
-        // 内容区（消息/思维链正文）唯一的例外：耗时时间戳是界面性信息，
-        // 且只动 "Worked for/Thought for ..." 这一种形态，其余一律不碰
-        var raw = node.textContent || "";
-        if (/^\s*(?:Worked|Thought) for /.test(raw)) {
-          var tsZh = elapsedTranslate(raw);
-          if (tsZh !== raw) node.textContent = tsZh;
+        // 内容区（消息/思维链正文）唯一的例外：耗时时间戳是界面性信息。
+        // 白名单只对 article 区开放（inArticleZone）：pre/code 里的
+        // "Worked for ..." 文本、用户消息与输入框里的同形文本都不会被改写；
+        // 捕获段要求数字开头进一步收窄（elapsedTranslate 内）。
+        if (inArticleZone(parent)) {
+          var raw = node.textContent || "";
+          if (/^\s*(?:Worked|Thought) for \d/.test(raw)) {
+            var tsZh = elapsedTranslate(raw);
+            if (tsZh !== raw) node.textContent = tsZh;
+          }
         }
         return;
       }
