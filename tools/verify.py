@@ -41,14 +41,21 @@ def grab(name, src):
 
     用 raw_decode 精确解析出第一个完整 JSON 值，而不是找分号截断——
     词典译文里一旦出现 ASCII 分号，按分隔符截取就会解析失败。
+    运行时初始化会把数据包成 nullProto({...})（防原型链污染），剥掉调用壳。
     """
     norm = src.replace("\r\n", "\n")
     head = "var " + name + " = "
     start = norm.find(head)
     if start < 0:
         raise SystemExit(f"[错误] 注入产物里找不到 {name}，安装目录可能未打补丁")
+    payload = norm[start + len(head):].lstrip()
+    # 运行时初始化会把数据包成 nullProto({...})（防原型链污染），剥掉调用前缀。
+    # 剥壳必须在 raw_decode 之前——"null" 恰好是合法 JSON 字面量，不剥壳会
+    # "成功"解析出 None（而不是报错），下游就在 len(None) 上崩溃。
+    if payload.startswith("nullProto("):
+        payload = payload[len("nullProto("):]
     try:
-        value, _end = json.JSONDecoder().raw_decode(norm[start + len(head):].lstrip())
+        value, _end = json.JSONDecoder().raw_decode(payload)
     except json.JSONDecodeError as e:
         raise SystemExit(f"[错误] 解析 {name} 失败: {e}")
     return value

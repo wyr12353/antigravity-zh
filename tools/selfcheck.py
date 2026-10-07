@@ -90,6 +90,8 @@ RULE_CASES = [
     # 应整句处理并补上中文句号（早先守卫会让它原样返回，句号也被吃掉）
     ("It requires Chrome to be installed.", "需要安装 Chrome。"),
     ("Configure the browser subagent.", "配置浏览器子智能体。"),
+    # 捕获段含逗号：早先字符类缺逗号时后半段留在英文里
+    ("Worked for 2 hours, 30 minutes", "运行耗时 2小时, 30分钟"),
 ]
 
 problems = []
@@ -383,7 +385,7 @@ def check_noise_parity():
     # 两段真实源码拼接：nullProto 的定义（isNoise 用的 KEYNAMES/JS_KEYWORDS
     # 都经它包装）+ 收集器内部段。注意第二段必须起于 if (SCAN) { 之内、
     # 终于块内——跨越块边界会截出括号不配平的半截脚本。
-    null_proto = runtime_slice("  function nullProto", "  // ---------- 收集器", "nullProto 实现")
+    null_proto = runtime_slice("  function nullProto", "  var EXACT", "nullProto 实现")
     noise_block = runtime_slice("    var KEYNAMES", "    var pending = new Map();", "isNoise 实现")
     if null_proto is None or noise_block is None:
         return

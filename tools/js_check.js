@@ -24,9 +24,18 @@ if (start < 0 || end < 0 || end <= start) {
   console.error("[失败] 无法从 zh_runtime.js 截取翻译实现（代码结构可能已变）");
   process.exit(2);
 }
+// 切片内 EXACT/WORDS 的初始化调用了 nullProto，translateText 用到 CJK_RE，
+// 两者的定义一起截取进 prelude（都在 EXACT 声明之前，可一段截下）
+const protoStart = src.indexOf("  var CJK_RE");
+const protoEnd = src.indexOf(START);
+if (protoStart < 0 || protoEnd <= protoStart) {
+  console.error("[失败] 无法从 zh_runtime.js 截取 nullProto 定义（代码结构可能已变）");
+  process.exit(2);
+}
 
 // 补齐切片之外唯一的依赖：patcher 注入的数据占位符本身。
 const prelude = [
+  src.slice(protoStart, protoEnd),
   "var __AGZH_EXACT__ = " + JSON.stringify(data.exact || {}) + ";",
   "var __AGZH_WORDS__ = " + JSON.stringify(data.words || {}) + ";",
   "var __AGZH_PREFIX_RULES__ = " + JSON.stringify(data.prefix || []) + ";",

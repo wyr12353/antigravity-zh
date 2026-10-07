@@ -13,11 +13,6 @@
   if (window.__AGZH_LOADED__) return;
   window.__AGZH_LOADED__ = true;
 
-  var EXACT = nullProto(__AGZH_EXACT__);
-  var WORDS = nullProto(__AGZH_WORDS__);
-  var PREFIX_RULES = __AGZH_PREFIX_RULES__;
-  var SCAN = __AGZH_SCAN__;
-
   var CJK_RE = /[\u4e00-\u9fff\u3400-\u4dbf]/;
 
   // 防 JS 原型链污染：EXACT/WORDS 这类数据若直接用 [] 查找，
@@ -30,13 +25,23 @@
     return r;
   }
 
+  var EXACT = nullProto(__AGZH_EXACT__);
+  var WORDS = nullProto(__AGZH_WORDS__);
+  var PREFIX_RULES = __AGZH_PREFIX_RULES__;
+  var SCAN = __AGZH_SCAN__;
+
   // 注意：[role=combobox] 刻意不列入跳过区。
   // 设置项的下拉选择器（安全预设 / 终端命令自动执行 / 工件审阅模式…）把"当前值"
   // 渲染在 combobox 自身或其子元素里，跳过它就等于折叠状态的值永远不翻译，
   // 而展开后的选项列表（[role=listbox]/[role=option]）却会被翻译 ——
   // 表现就是"展开的是中文、不展开的那个还是英文"。
   // 可编辑输入仍由 input / textarea / [role=textbox] / [contenteditable] 兜住。
-  var SKIP_SEL = "pre, code, textarea, input, script, style, .monaco-editor, [contenteditable], [role=textbox], [role=searchbox]";
+  //
+  // [role=article] 是对话消息流（User message / Agent response / 思维链）。
+  // 模型输出与思维链是"内容"而非界面：流式渲染会把一句话拆成大量碎片节点，
+  // 词典里的短词条与弱匹配词表会命中碎片，产出中英混杂的乱翻文本。
+  // 因此内容区整体跳过；耗时时间戳等界面性信息由 processNode 的白名单特例处理。
+  var SKIP_SEL = "pre, code, textarea, input, script, style, .monaco-editor, [contenteditable], [role=textbox], [role=searchbox], [role=article]";
 
   // ---------- 收集器（scan 模式）----------
   var collector = null;
@@ -144,12 +149,23 @@
       /(\d+(?:\.\d+)?)\s*(ms|milliseconds?|secs?|seconds?|s|mins?|minutes?|m|hrs?|hours?|h)\b/gi,
       function (_, num, unit) {
         var u = unit.toLowerCase();
+        // 全称（minutes/seconds/hours）先于缩写判断——早先 indexOf("min") === 0
+        // 的写法让 "minutes" 全称也落到缩写 "分"，产出 "30分" 而非 "30分钟"
         var zh = u === "ms" || u.indexOf("millisecond") === 0 ? "毫秒"
-               : u.indexOf("sec") === 0 || u === "s" ? "秒"
-               : u.indexOf("min") === 0 || u === "m" ? "分"
+               : u === "s" || u.indexOf("sec") === 0 ? "秒"
+               : u.indexOf("minute") === 0 ? "分钟"
+               : u === "m" || u.indexOf("min") === 0 ? "分"
                : "小时";
         return num + zh;
       });
+  }
+  // "Worked for 1.2s" / "Thought for 45 sec" → 运行/思考耗时。
+  // 这是界面性信息，但渲染在对话消息流（role=article，已整体跳过）的折叠条上，
+  // 所以除了常规 SUBSTR 路径，processNode 的跳过区分支也会调用本函数。
+  function elapsedTranslate(t) {
+    return t
+      .replace(/Worked for ([\d.a-z, ]+)/gi, function (_, ts) { return "运行耗时 " + elapsedZh(ts); })
+      .replace(/Thought for ([\d.a-z, ]+)/gi, function (_, ts) { return "思考耗时 " + elapsedZh(ts); });
   }
 
   // ---------- 规则表：整句模板 ----------
@@ -199,13 +215,8 @@
       t = t.replace(/%\s*of the customization budget is available\.?/g, "% 的自定义项预算可用额度。");
       return t.replace(/(^\s*)of the customization budget is available\.?/g, "$1的自定义项预算可用额度。");
     }],
-    ["Worked for", function (t) {
-      // 捕获段含逗号："Worked for 2 hours, 30 minutes" 的后半段不能留在英文里
-      return t.replace(/Worked for ([\d.a-z, ]+)/gi, function (_, ts) { return "运行耗时 " + elapsedZh(ts); });
-    }],
-    ["Thought for", function (t) {
-      return t.replace(/Thought for ([\d.a-z, ]+)/gi, function (_, ts) { return "思考耗时 " + elapsedZh(ts); });
-    }],
+    ["Worked for", elapsedTranslate],
+    ["Thought for", elapsedTranslate],
     // 只处理"独立成句的 Working"（状态文本 "Working" / "Working..."）。
     // 早先用无边界子串命中，会把 "Working Directory: " 翻成"运行中 Directory: "——
     // 而词典里的键带尾随空格，运行时查的是 trim 后的文本，永远命中不了，
@@ -346,7 +357,16 @@
     if (!node) return;
     if (node.nodeType === 3) { // TEXT_NODE
       var parent = node.parentElement || node.parentNode;
-      if (parent && inSkipZone(parent)) return;
+      if (parent && inSkipZone(parent)) {
+        // 内容区（消息/思维链正文）唯一的例外：耗时时间戳是界面性信息，
+        // 且只动 "Worked for/Thought for ..." 这一种形态，其余一律不碰
+        var raw = node.textContent || "";
+        if (/^\s*(?:Worked|Thought) for /.test(raw)) {
+          var tsZh = elapsedTranslate(raw);
+          if (tsZh !== raw) node.textContent = tsZh;
+        }
+        return;
+      }
       var translated = translateText(node.textContent, parent);
       if (translated !== node.textContent) node.textContent = translated;
     } else if (node.nodeType === 1) { // ELEMENT_NODE
