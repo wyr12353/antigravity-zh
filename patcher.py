@@ -311,7 +311,8 @@ def companion_left(install):
         out = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
     except (OSError, subprocess.TimeoutExpired):
         return []          # PowerShell 不可用时按"无伴生进程"处理，后续 _retry 兜底
-    return sorted({line.strip() + ".exe" for line in out.splitlines() if line.strip()})
+    return sorted({line.strip() + ("" if line.strip().lower().endswith(".exe") else ".exe")
+                   for line in out.splitlines() if line.strip()})
 
 
 def _retry(func, attempts=5, delay=0.6):
@@ -465,7 +466,14 @@ def inject_block(app_dir, rel_path, block, marker, label):
         action = "热更新"
     else:
         action = "注入"
-    file_path.write_text(content + "\n\n" + marker + "\n" + block + "\n", encoding="utf-8")
+    try:
+        file_path.write_text(content + "\n\n" + marker + "\n" + block + "\n", encoding="utf-8")
+    except OSError as e:
+        # write_text 先截断后写：失败会留下半截 preload/main，客户端可能直接起不来。
+        # 这里必须给出恢复指引，否则用户只看到通用分支的"执行失败"。
+        raise SystemExit(
+            f"[错误] 写入 {rel_path} 失败：{e}\n"
+            "        该文件可能已被写坏，请运行 python patcher.py restore 还原官方原版后重试。")
     print(f"[成功] {action}{label} -> {rel_path}")
     return True
 
@@ -487,7 +495,12 @@ def apply_targeted_replaces(app_dir):
             else:
                 missed.append(old.splitlines()[0][:48])
         if content != original:
-            target.write_text(content, encoding="utf-8")
+            try:
+                target.write_text(content, encoding="utf-8")
+            except OSError as e:
+                raise SystemExit(
+                    f"[错误] 写入 {rel} 失败：{e}\n"
+                    "        该文件可能已被写坏，请运行 python patcher.py restore 还原官方原版后重试。")
             print(f"[成功] 字面量替换 -> {rel}")
         if missed:
             print(f"[提示] {rel} 有 {len(missed)} 处字面量未匹配"
@@ -528,9 +541,11 @@ def do_patch(install, scan, auto_yes, launch):
     try:
         with Asar(backup_path) as a:
             count, total = a.extract_to(app_dir)
-    except (AsarError, OSError) as e:
+    except (AsarError, ValueError, KeyError, struct.error, OSError) as e:
         # 此时 app.asar 已改名、resources/app 只解了一半：Electron 会优先加载
         # 这个半成品目录，应用直接损坏。必须给出可执行的恢复路径而不是抛栈。
+        # 异常类型对齐 read_version：构造合法但条目缺 size/offset 的 asar 会抛
+        # KeyError/ValueError，只捕 (AsarError, OSError) 会让它逃到通用分支。
         raise SystemExit(
             f"[错误] 解包 app.asar 失败：{e}\n"
             f"        {APP_REL} 现在是不完整状态，请运行 python patcher.py restore 还原官方原版。")
@@ -730,8 +745,8 @@ def do_status(install):
         return
     try:
         marker = json.loads(marker_path.read_text(encoding="utf-8-sig"))
-    except (json.JSONDecodeError, OSError) as e:
-        # 上次 patch 中途被杀可能留下半截标记
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError) as e:
+        # 上次 patch 中途被杀可能留下半截标记；也可能写进了非 UTF-8 字节
         print(f"补丁状态   : 标记文件损坏（{e}）—— 请重跑 python patcher.py patch，"
               "或用 restore 还原后重试")
         return

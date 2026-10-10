@@ -172,6 +172,12 @@
       .replace(/Worked for (\d[\d.a-z, ]*)/gi, function (_, ts) { return "运行耗时 " + elapsedZh(ts); })
       .replace(/Thought for (\d[\d.a-z, ]*)/gi, function (_, ts) { return "思考耗时 " + elapsedZh(ts); });
   }
+  // 耗时条"整节点"的形态。processNode 在 article 跳过区放行耗时条时必须用这个
+  // 判据，而不是"以 Worked/Thought for 数字开头"：elapsedTranslate 内部是子串
+  // 替换，只判开头会把正文里 "Worked for 3 hours, still failing" 这种句子截成
+  // 半中半英（"运行耗时 3小时, still failing"）。这里要求整节点只由「数字 + 单位」
+  // 的若干段组成，正文句子必然带别的内容而无法匹配。
+  var ELAPSED_NODE_RE = /^\s*(?:Worked|Thought) for\s+(?:\d+(?:\.\d+)?\s*(?:milliseconds?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h)\b[\s,]*)+$/i;
 
   // ---------- 规则表：整句模板 ----------
   // 数据来自 dict/template_rules.json（由 patcher 注入），此处只做编译。
@@ -396,10 +402,12 @@
         // 内容区（消息/思维链正文）唯一的例外：耗时时间戳是界面性信息。
         // 白名单只对 article 区开放（inArticleZone）：pre/code 里的
         // "Worked for ..." 文本、用户消息与输入框里的同形文本都不会被改写；
-        // 捕获段要求数字开头进一步收窄（elapsedTranslate 内）。
+        // 且必须整节点就是一个耗时条（ELAPSED_NODE_RE），只判开头会让
+        // "Worked for 3 hours, still failing" 这类正文被截成半中半英。
         if (inArticleZone(parent)) {
           var raw = node.textContent || "";
-          if (/^\s*(?:Worked|Thought) for \d/.test(raw)) {
+          // 整节点必须就是一个耗时条才动它（见 ELAPSED_NODE_RE 处的说明）
+          if (ELAPSED_NODE_RE.test(raw)) {
             var tsZh = elapsedTranslate(raw);
             if (tsZh !== raw) node.textContent = tsZh;
           }

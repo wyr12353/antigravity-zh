@@ -215,7 +215,9 @@ def check_dicts():
     dups = []
     for path in sorted(DICT_DIR.glob("*.json")):
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
+            # 与 patcher.load_dicts 用同一种读法（utf-8-sig）：词典带 BOM 时
+            # patcher 能正常加载，自检若按 utf-8 读会误判成"JSON 非法"
+            data = json.loads(path.read_text(encoding="utf-8-sig"))
         except json.JSONDecodeError as e:
             fail(f"{path.name} JSON 非法：{e}")
             continue
@@ -355,7 +357,7 @@ def check_runtime_rules():
         # 桩对齐运行时形态：EXACT 在运行时经 nullProto 包装为无原型对象，
         # 桩若用 {} 会让 "constructor" 这类键恒真——测试态与运行态不同
         "var EXACT = Object.create(null);\n"
-        "var WORDS = {};\n" + block + "\n"
+        "var WORDS = Object.create(null);\n" + block + "\n"
         "var CASES = " + json.dumps(RULE_CASES, ensure_ascii=False) + ";\n"
         "var fails = [];\n"
         "CASES.forEach(function (c) {\n"
