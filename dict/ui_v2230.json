@@ -1,0 +1,11 @@
+{
+  "_source": "antigravity-zh 自维护：v2.23.0 补译（由 scan 实机收集，只收静态完整文案）",
+  "_note": "键为英文原文、值为中文。文件名排在 ui_extra.json 与 ui_v2191.json 之后，同名键以本文件为准。动态拼接句（如 'Skills: N tokens'、'..., current: X'）与跨节点片段不在此列，它们需要规则或边界处理。",
+  "exact": {
+    "Choose between the Default and Project 4K experience.": "在默认与 Project 4K 体验之间选择。",
+    "Choose the experience that fits how you work.": "选择适合您工作方式的体验。",
+    "Legal Help": "法律帮助",
+    "Project 4K interface without developer tooling.": "不含开发者工具的 Project 4K 界面。",
+    "Remove resource": "移除资源"
+  }
+}
