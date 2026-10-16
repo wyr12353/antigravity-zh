@@ -1,0 +1,10 @@
+{
+  "_source": "antigravity-zh 自维护：v2.23.1 补译（由 scan 实机收集）",
+  "_note": "键为英文原文、值为中文。文件名排在 ui_v2230.json 之后，同名键以本文件为准。模型名（Gemini 4 Argon、Claude Sonnet 4.6 等）与产品名不在此列，它们本就不译。",
+  "exact": {
+    "GPT-OSS will be removed from Antigravity on November 2, 2026.": "GPT-OSS 将于 2026 年 11 月 2 日从 Antigravity 中移除。",
+    "Gemini 4 Argon is currently available to Ultra and paid Pro plan subscribers.": "Gemini 4 Argon 目前仅对 Ultra 与付费 Pro 计划订阅者开放。",
+    "Notice": "通知",
+    "Unavailable": "不可用"
+  }
+}
