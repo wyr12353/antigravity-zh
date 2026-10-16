@@ -8,9 +8,24 @@
       "规则: $1 个 token"
     ],
     [
+      "^Skills: ([\\d,]+) tokens$",
+      "",
+      "技能: $1 个 token"
+    ],
+    [
+      "^Mcp Tools: ([\\d,]+) tokens$",
+      "",
+      "MCP 工具: $1 个 token"
+    ],
+    [
       "^(\\d+) active conversations$",
       "",
       "$1 个活跃对话"
+    ],
+    [
+      "^(\\d+) tasks? running$",
+      "",
+      "$1 个任务运行中"
     ],
     [
       "^Select one of the .+$",
@@ -76,6 +91,11 @@
       "^Select model, current: (.+)$",
       "",
       "选择模型，当前: $1"
+    ],
+    [
+      "^Agent permissions preset selector, current: (.+)$",
+      "",
+      "智能体权限预设选择器，当前: $1"
     ],
     [
       "^Select project, current: (.+)$",
@@ -158,6 +178,26 @@
       "$1天前"
     ],
     [
+      "^(\\d+)s ago$",
+      "",
+      "$1秒前"
+    ],
+    [
+      "^(\\d+)m ago$",
+      "",
+      "$1分钟前"
+    ],
+    [
+      "^(\\d+)h ago$",
+      "",
+      "$1小时前"
+    ],
+    [
+      "^(\\d+)d ago$",
+      "",
+      "$1天前"
+    ],
+    [
       "^Yes, and always allow '(.+)' in this conversation$",
       "",
       "是，在本次对话中始终允许 '$1'"
@@ -223,6 +263,21 @@
       "查看全部 ($1)"
     ],
     [
+      "^See more in (.+)$",
+      "",
+      "在 $1 中查看更多"
+    ],
+    [
+      "^See less in (.+)$",
+      "",
+      "收起 $1"
+    ],
+    [
+      "^Opens external link: (.+)$",
+      "",
+      "打开外部链接：$1"
+    ],
+    [
       "^See (\\d+) more$",
       "",
       "再显示 $1 条"
@@ -251,6 +306,16 @@
       "^Unnamed skill (\\d+)$",
       "",
       "未命名技能 $1"
+    ],
+    [
+      "^No more older messages, showing (.+) of (.+)$",
+      "",
+      "没有更多历史消息了，显示 $1 / $2"
+    ],
+    [
+      "^Install (.+)$",
+      "",
+      "安装 $1"
     ]
   ]
 }
