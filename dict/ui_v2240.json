@@ -1,8 +1,11 @@
 {
-  "_source": "antigravity-zh 自维护：v2.24.0 补译（设置页运行时拼接的碎片文案）",
-  "_note": "bundle 里写的是 `Inherits your Global Permissions when working ${E}.`，${E} 是运行时变量，渲染时整句被拆成独立文本节点，所以实际命中的是 `when working ...` 这个碎片。词典原本只有 `when working in this project.`，缺 `these conversations` 版。",
+  "_source": "antigravity-zh 自维护：v2.24.0 补译（设置页被 React 拆成多节点的说明文字）",
+  "_note": "bundle 里这处是 React.createElement(Fragment, null, \"Also includes\", \" \", <span>Global Permissions</span>, \" \", \"when working \", E, \".\", \" \")——整句被拆成多个独立文本节点，中间还夹着带样式的 span，所以整句条目永远命中不了。只能逐碎片配对翻译：\"when working\"+\"in these conversations\" 两个节点拼起来才是通顺的「在 这些对话中工作时」。改这三个碎片前请确认没有别处单独使用它们。",
   "exact": {
     "Inherits your General settings when working in these conversations.": "在这些对话中工作时继承您的全局设置。",
-    "when working in these conversations.": "（当在这些对话中工作时）。"
+    "when working": "在",
+    "when working in these conversations.": "（当在这些对话中工作时）。",
+    "in these conversations": "这些对话中工作时",
+    "in this project": "此项目中工作时"
   }
 }
