@@ -9,7 +9,6 @@
 """
 import json
 import sys
-import time
 from pathlib import Path
 
 # 同 tools/selfcheck.py 里的保护：管道输出时 locale 编码（cp1252）放不下中文。
@@ -21,10 +20,9 @@ for _stream in (sys.stdout, sys.stderr):
             pass
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from scan_filter import clean  # noqa: E402
+from scan_filter import OUT_FILE, clean  # noqa: E402
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
-OUT_FILE = PROJECT_DIR / "out" / "untranslated.json"
 DICT_DIR = PROJECT_DIR / "dict"
 DICT_FILE = DICT_DIR / "common.json"
 
@@ -39,9 +37,12 @@ def load_known_keys():
     known = set()
     for path in sorted(DICT_DIR.glob("*.json")):
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            continue
+            data = json.loads(path.read_text(encoding="utf-8-sig"))
+        except (json.JSONDecodeError, OSError) as e:
+            # 静默跳过很危险：该文件的键不在 known 里，用户会被提示去补译
+            # 其实已翻译的条目，写进 common.json 后又被那个文件覆盖——等于白改。
+            raise SystemExit(f"[错误] 读取词典 {path.name} 失败：{e}\n"
+                             "        请先修好它（所有 dict/*.json 都会被合并）。")
         known.update(data.get("exact", {}))
     return known
 
@@ -106,12 +107,14 @@ def main():
         print("未修改词典。")
         return
 
-    backup = DICT_FILE.with_suffix(".json.bak")
+    # 备份落在 out/ 而不是 dict/：dict/ 整个会被 --add-data 打进 exe，
+    # 一份 200 KB 级的 .bak 会变成 exe 里的死数据。
+    backup = OUT_FILE.parent / (DICT_FILE.name + ".bak")
     backup.write_text(DICT_FILE.read_text(encoding="utf-8"), encoding="utf-8")
     DICT_FILE.write_text(
         json.dumps(dicts, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     print(f"[完成] 新增 {added} 条词条 -> {DICT_FILE}")
-    print(f"[完成] 旧词典已备份为 {backup.name}（{time.strftime('%H:%M')}）")
+    print(f"[完成] 旧词典已备份为 {backup}")
     print("[提示] 运行 python patcher.py patch 应用新词典")
 
 

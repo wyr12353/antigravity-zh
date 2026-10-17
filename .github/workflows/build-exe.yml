@@ -104,6 +104,9 @@ jobs:
             Out-File -Append -Encoding utf8 release-notes.md
 
       - name: 上传产物
+        # 打 tag 时下面那步 Release 已经上传同样的文件，这里只保留手动运行
+        # （workflow_dispatch）时从 Actions 页面下载产物的能力。
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         uses: actions/upload-artifact@v7
         with:
           name: antigravity-zh-windows-x64

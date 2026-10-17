@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-"""验证翻译引擎对给定句式的处理结果（纯 Python，不需要 Node）。
+"""验证翻译引擎对给定句式的处理结果（Python 模拟层 + 可选的真实 Node 引擎层）。
 
 数据源可以是**已注入补丁的安装目录**，也可以是 dict/*.json（--from-dict，供 CI 用）。
-跑 tools/verify_cases.json 里的用例并报告通过率，用于改词典/规则后的回归检查。
+跑 tools/verify_cases.json 里的用例并报告通过率，用于改词典/规则后的回归检查；
+装了 node 时再把同一批用例交给真实 JS 引擎比对一遍（见 run_js_check）。
 
 用法:
     python tools/verify.py [--dir 安装目录] [--verbose] [--from-dict]
@@ -109,8 +110,8 @@ def run_js_check(dicts, cases):
         return 1
 
     js_failed = result.get("failed", 0)
-    total = result.get("passed", 0) + js_failed
-    print(f"Node 真实引擎: {result['passed']}/{total} 通过"
+    js_passed = result.get("passed", 0)
+    print(f"Node 真实引擎: {js_passed}/{js_passed + js_failed} 通过"
           + ("，全部正确" if js_failed == 0 else f"，{js_failed} 条未通过"))
     for item in result.get("failures", []):
         print(f"  原文: {item['text']}\n  期望: {item['expect']}\n  实际: {item['got']}\n")
@@ -224,6 +225,10 @@ def main():
           f"前缀规则 {len(dicts['rules'])} | 模板规则 {len(dicts['template'])}\n")
 
     cases = json.loads(CASES_FILE.read_text(encoding="utf-8"))["cases"]
+    if not cases:
+        # 空集合不算通过：用例被清空时 0/0 会照样报"全部正确"并返回 0
+        print("\n[失败] verify_cases.json 里没有任何用例")
+        return 1
     translate = make_translate(dicts)
 
     passed = failed = 0

@@ -8,7 +8,7 @@
 
 不需要本机安装 Antigravity（那部分是 tools/verify.py 的职责），
 所以既能作为本地提交前检查，也能直接跑在 CI 上。
-其中三组依赖 node（JS 语法、噪声等价、运行时规则），未安装时自动跳过。
+其中四组依赖 node（JS 语法、模板正则、噪声等价、运行时规则），未安装时自动跳过。
 """
 import json
 import os
@@ -41,9 +41,9 @@ import patcher  # noqa: E402
 # 词典文件允许出现的顶层段落及其类型
 SECTIONS = {"exact": dict, "words": dict, "menus": dict, "rules": list, "template": list}
 
-# 占位符的提取/校验统一用 patcher.data_placeholders（上方已导入 patcher），
-# 不在本文件重复定义正则——patcher 改提取方式时这里自动跟随。
-PROVIDED_RE = re.compile(r'"(__AGZH_[A-Z_]+__)"\s*:')
+# 提取「patcher.py 提供了哪些占位符」：占位符正则复用 patcher 的，避免两边漂移；
+# 外面再套引号+冒号，确保只认 replacements 字典的键，而不是注释里提到的同名字样。
+PROVIDED_RE = re.compile(r'"(' + patcher.DATA_PLACEHOLDER_RE.pattern + r')"\s*:')
 
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
 USER_PATH_RE = re.compile(r"[A-Za-z]:[\\/]{1,2}Users[\\/]{1,2}([^\\/\s\"']+)")
@@ -94,6 +94,8 @@ RULE_CASES = [
     ("Worked for 2 hours, 30 minutes", "运行耗时 2小时, 30分钟"),
     # 交替表补天/周单位后：天级耗时不再半翻译
     ("Worked for 3 days", "运行耗时 3天"),
+    # elapsedTranslate 的整节点闸门：带其它内容的句子不能被截成半中半英
+    ("Worked for 2 minutes on main.py", "Worked for 2 minutes on main.py"),
 ]
 
 problems = []
@@ -202,7 +204,13 @@ def check_js_syntax():
         return
     bad = 0
     for path in files:
-        proc = subprocess.run(["node", "--check", str(path)], capture_output=True)
+        try:
+            proc = subprocess.run(["node", "--check", str(path)], capture_output=True, timeout=60)
+        except subprocess.TimeoutExpired:
+            # 与 run_node 的超时口径一致：node 卡住要报失败，不能把 CI 挂死
+            fail(f"{rel(path)} 语法检查超时（node --check 60 秒未返回）")
+            bad += 1
+            continue
         if proc.returncode != 0:
             fail(f"{rel(path)} 语法错误：{proc.stderr.decode('utf-8', 'replace').strip()[:200]}")
             bad += 1
@@ -213,6 +221,7 @@ def check_js_syntax():
 def check_dicts():
     origin = {}
     dups = []
+    loaded = []      # (文件名, 已解析数据)：下面的模板正则 JS 校验复用它，不再重读重解析
     for path in sorted(DICT_DIR.glob("*.json")):
         try:
             # 与 patcher.load_dicts 用同一种读法（utf-8-sig）：词典带 BOM 时
@@ -221,6 +230,7 @@ def check_dicts():
         except json.JSONDecodeError as e:
             fail(f"{path.name} JSON 非法：{e}")
             continue
+        loaded.append((path.name, data))
         for name, typ in SECTIONS.items():
             if name in data and not isinstance(data[name], typ):
                 fail(f"{path.name} 的 {name} 应为 {typ.__name__}")
@@ -265,6 +275,9 @@ def check_dicts():
                     dups.append(f"{section}:{key}（{first} → {path.name}）")
     if dups:
         fail(f"{len(dups)} 个词条跨文件重复（后加载的会覆盖前者）：" + "; ".join(dups[:5]))
+    elif not origin:
+        # 空集合不算通过：dict/ 为空或路径不对时，宁可红灯也不能给假绿灯
+        fail("词典里没有任何词条（dict/ 为空或路径不对）")
     else:
         ok(f"词典共 {len(origin)} 个键，无跨文件重复；规则结构合法")
 
@@ -272,11 +285,8 @@ def check_dicts():
     # JS 能（如 Python 风格的 (?P<name>)）。一条在 JS 里编译失败会让注入后的
     # 整个翻译引擎崩溃，而 status 仍显示已汉化。
     if shutil.which("node"):
-        tpls = []
-        for path in sorted(DICT_DIR.glob("*.json")):
-            data = json.loads(path.read_text(encoding="utf-8-sig"))
-            for r in data.get("template", []):
-                tpls.append([path.name, r[0], r[1]])
+        tpls = [[fname, r[0], r[1]] for fname, data in loaded
+                for r in data.get("template", []) if isinstance(r, list) and len(r) == 3]
         script = (
             "var tpls = JSON.parse(require('fs').readFileSync(process.argv[2], 'utf-8'));\n"
             "var bad = [];\n"
@@ -416,6 +426,10 @@ def check_noise_parity():
     if js_results is None:
         return
 
+    if len(js_results) != len(NOISE_SAMPLES):
+        # zip 会静默截断到较短一侧：只比了一部分却报"全部等价"是最坏的结果
+        fail(f"噪声等价性校验返回 {len(js_results)} 条，期望 {len(NOISE_SAMPLES)} 条")
+        return
     diffs = [(s, is_noise(s), j) for s, j in zip(NOISE_SAMPLES, js_results) if is_noise(s) != j]
     if diffs:
         fail(f"噪声判定两侧不一致 {len(diffs)} 条：" +
@@ -444,7 +458,10 @@ def check_privacy():
         for m in USER_PATH_RE.finditer(text):
             if m.group(1).lower() not in SAFE_USERS:
                 hits.append(f"{rel(path)}：本机路径 {m.group(0)}")
-        if len(me) >= 4 and me.lower() in text.lower():
+        # 按词边界匹配：常见账号名（work/data/mark）裸子串会把 workspace、
+        # workflows 判成隐私泄漏，反而卡住正常提交。
+        if len(me) >= 4 and re.search(r"(?<![A-Za-z0-9])" + re.escape(me) + r"(?![A-Za-z0-9])",
+                                      text, re.I):
             hits.append(f"{rel(path)}：出现本机用户名 {me}")
     if hits:
         fail("疑似隐私泄漏：" + "; ".join(hits[:5]))

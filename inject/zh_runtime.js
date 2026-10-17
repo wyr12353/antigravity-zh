@@ -4,8 +4,8 @@
 // 原理：MutationObserver 监听 DOM 变化，按词典把英文替换为中文。
 // 词典来源：MIMICTE/Antigravity-zh-CN (MIT) 移植 + 自维护词条。
 //
-// 翻译顺序：整句精确(EXACT) → 整句模板(TEMPLATE_RULES) → 子串替换(SUBSTR_RULES)
-//          → 前缀规则(PREFIX_RULES) → 短词弱匹配(WORDS)
+// 翻译顺序：整句精确(EXACT) → 函数式规则(FN_RULES) → 整句模板(TEMPLATE_RULES)
+//          → 子串替换(SUBSTR_RULES) → 前缀规则(PREFIX_RULES) → 短词弱匹配(WORDS)
 // 新增规则只改数据表，不必改流程。
 // ============================================================
 (function () {
@@ -168,6 +168,10 @@
   // 捕获段必须以数字开头：正文里 "Worked for me, thanks" 这类文本不是时间戳，
   // 不能因为前缀相同就被改写（i 标志下字符类含全部字母，靠 \\d 卡住）。
   function elapsedTranslate(t) {
+    // 内部再卡一次整节点：SUBSTR 路径（属性、非 article 文本）没有 processNode
+    // 的闸门，宽松捕获会把 aria-label="Worked for 2 minutes on file" 改成
+    // "运行耗时 2分钟 on file" 这种半中半英。
+    if (!ELAPSED_NODE_RE.test(t)) return t;
     return t
       .replace(/Worked for (\d[\d.a-z, ]*)/gi, function (_, ts) { return "运行耗时 " + elapsedZh(ts); })
       .replace(/Thought for (\d[\d.a-z, ]*)/gi, function (_, ts) { return "思考耗时 " + elapsedZh(ts); });
@@ -177,7 +181,10 @@
   // 替换，只判开头会把正文里 "Worked for 3 hours, still failing" 这种句子截成
   // 半中半英（"运行耗时 3小时, still failing"）。这里要求整节点只由「数字 + 单位」
   // 的若干段组成，正文句子必然带别的内容而无法匹配。
-  var ELAPSED_NODE_RE = /^\s*(?:Worked|Thought) for\s+(?:\d+(?:\.\d+)?\s*(?:milliseconds?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h)\b[\s,]*)+$/i;
+  // 单位表必须与上面 elapsedZh 的正则一致：漏掉 days?/d/weeks? 会让
+  // "Worked for 2 days" 在 article 区永远放行不了，而同样文本在非 article 区
+  // 却会被 SUBSTR 翻掉，同一个耗时条出现两种结果。
+  var ELAPSED_NODE_RE = /^\s*(?:Worked|Thought) for\s+(?:\d+(?:\.\d+)?\s*(?:ms|milliseconds?|weeks?|secs?|seconds?|s|mins?|minutes?|m|hrs?|hours?|days?|d|h)\b[\s,]*)+$/i;
 
   // ---------- 规则表：整句模板 ----------
   // 数据来自 dict/template_rules.json（由 patcher 注入），此处只做编译。
@@ -267,6 +274,13 @@
     }]
   ];
 
+  // 译文作为替换串传给 String.replace 时，$& / $` / $' / $$ 会被当成替换模式
+  // 二次解释（实测：模板捕获到含 $& 的 URL 时，译文里会插进整句原文）。
+  // 统一走函数式替换：返回值原样插入，不做任何替换模式解释。
+  function putBack(text, trimmed, out) {
+    return text.replace(trimmed, function () { return out; });
+  }
+
   // ---------- 核心：翻译一段文本 ----------
   function translateText(text, el) {
     if (!text || typeof text !== "string") return text;
@@ -274,16 +288,16 @@
     if (!trimmed) return text;
     if (CJK_RE.test(trimmed)) return text; // 已含中文，跳过（也防自触发循环）
 
-    if (EXACT[trimmed]) return text.replace(trimmed, EXACT[trimmed]);
+    if (EXACT[trimmed]) return putBack(text, trimmed, EXACT[trimmed]);
 
     // 整句规则：先函数式（需查词典/单位换算），再纯模板
     var m;
     for (var i = 0; i < FN_RULES.length; i++) {
-      if ((m = trimmed.match(FN_RULES[i][0]))) return text.replace(trimmed, FN_RULES[i][1](m));
+      if ((m = trimmed.match(FN_RULES[i][0]))) return putBack(text, trimmed, FN_RULES[i][1](m));
     }
     for (var j = 0; j < TEMPLATE_RULES.length; j++) {
       var replaced = trimmed.replace(TEMPLATE_RULES[j][0], TEMPLATE_RULES[j][1]);
-      if (replaced !== trimmed) return text.replace(trimmed, replaced);
+      if (replaced !== trimmed) return putBack(text, trimmed, replaced);
     }
 
     // 子串替换（返回原文说明该规则不适用，继续往下）
@@ -302,7 +316,7 @@
     // ≤3 个词的短文案走弱匹配词表
     if (trimmed.split(/\s+/).length <= 3) {
       var lower = trimmed.toLowerCase();
-      if (WORDS[lower]) return text.replace(trimmed, WORDS[lower]);
+      if (WORDS[lower]) return putBack(text, trimmed, WORDS[lower]);
     }
 
     if (SCAN) collector.miss(text, el);
@@ -334,16 +348,15 @@
   // title/aria-label/alt/data-tooltip 的 get→translate→set 同一模式
   var TRANSLATED_ATTRS = ["title", "aria-label", "alt", "data-tooltip"];
 
-  function processElement(el) {
-    // 属性（placeholder / title / aria-label / alt / data-tooltip）始终翻译，
-    // **包括处于跳过区的元素**。跳过区要保护的是"代码与正文内容"，
-    // 而这些属性是控件的可访问标签与悬停提示：早先在这里直接 return，
-    // 导致聊天输入区、富文本编辑器内部按钮的 tooltip 一直是英文。
-    var skip = inSkipZone(el);
-    var isField = el.tagName === "INPUT" || el.tagName === "TEXTAREA";
-
+  // 属性翻译（placeholder / title / aria-label / alt / data-tooltip / 按钮 value）。
+  // 单独抽出：attributes 变更只需要重跑这一段，不必重走整棵子树。
+  // 属性始终翻译，**包括处于跳过区的元素**：跳过区要保护的是"代码与正文内容"，
+  // 而这些是控件的可访问标签与悬停提示（早先在这里直接 return，导致聊天输入区、
+  // 富文本编辑器内部按钮的 tooltip 一直是英文）。
+  function applyAttrs(el) {
     // placeholder 只在 input/textarea 上实现，其它元素上访问会走原型链查找；
     // 本函数对整片 DOM 的每个元素都会调用，先做标签守卫省下这次查找。
+    var isField = el.tagName === "INPUT" || el.tagName === "TEXTAREA";
     if (isField && el.placeholder) {
       var p = translateText(el.placeholder, el);
       if (p !== el.placeholder) el.placeholder = p;
@@ -361,13 +374,17 @@
       var v = translateText(el.value, el);
       if (v !== el.value) el.value = v;
     }
+  }
+
+  function processElement(el) {
+    applyAttrs(el);
 
     // 属性处理完毕；跳过区内的元素不再递归处理文本与子节点。
     // 例外：消息流（article）内的控件——复制/重试按钮等——同样是控件，
     // 它们的 title/aria-label 也要翻。递归子元素时子元素 skip 仍为真，
     // 只会走到属性段后再次进入本分支，天然只翻属性、绝不碰文本；
     // monaco/contenteditable 的最近命中是自身而非 article，不递归。
-    if (skip) {
+    if (inSkipZone(el)) {
       if (inArticleZone(el)) {
         var zoneKids = el.children;
         for (var zc = 0; zc < zoneKids.length; zc++) processElement(zoneKids[zc]);
@@ -385,20 +402,22 @@
         var joined = el.textContent;
         var jt = joined.trim();
         if (jt && !CJK_RE.test(jt) && EXACT[jt]) {
-          el.textContent = joined.replace(jt, EXACT[jt]);
+          el.textContent = putBack(joined, jt, EXACT[jt]);
           return;
         }
       }
     }
 
-    for (var c = 0; c < kids.length; c++) processNode(kids[c]);
+    for (var c = 0; c < kids.length; c++) processNode(kids[c], true);
   }
 
-  function processNode(node) {
+  // inside：调用方已确认该节点不在跳过区内（processElement 递归时传 true），
+  // 省掉每个文本子节点重复的 closest(SKIP_SEL) 查询。
+  function processNode(node, inside) {
     if (!node) return;
     if (node.nodeType === 3) { // TEXT_NODE
       var parent = node.parentElement || node.parentNode;
-      if (parent && inSkipZone(parent)) {
+      if (!inside && parent && inSkipZone(parent)) {
         // 内容区（消息/思维链正文）唯一的例外：耗时时间戳是界面性信息。
         // 白名单只对 article 区开放（inArticleZone）：pre/code 里的
         // "Worked for ..." 文本、用户消息与输入框里的同形文本都不会被改写；
@@ -417,8 +436,9 @@
       var translated = translateText(node.textContent, parent);
       if (translated !== node.textContent) node.textContent = translated;
     } else if (node.nodeType === 1) { // ELEMENT_NODE
-      var tag = node.tagName;
-      if (tag === "SCRIPT" || tag === "STYLE" || tag === "CODE" || tag === "PRE") return;
+      // SCRIPT/STYLE/CODE/PRE 本来就都在 SKIP_SEL 里：走 processElement 时
+      // skip=true，只会翻属性、不碰文本。早先在这里提前 return，等于连
+      // title/aria-label 都不翻，与"属性始终翻译（含跳过区）"的设计相悖。
       processElement(node);
     }
   }
@@ -440,10 +460,12 @@
           for (var j = 0; j < mu.addedNodes.length; j++) processNode(mu.addedNodes[j]);
         } else if (mu.type === "characterData") {
           processNode(mu.target);
-        } else if (mu.type === "attributes" && mu.target && mu.target.nodeType === 1) {
-          // 不做跳过区过滤：processElement 对跳过区元素也是先译属性再 return，
-          // 输入框运行中动态切换的 placeholder 同样需要被翻到
-          processElement(mu.target);
+        } else if (mu.type === "attributes") {
+          // 属性变更只重跑属性段：attributes 记录的 target 必然是元素，而
+          // processElement 会连带重走整棵子树（我们自己写入的属性还会再触发
+          // 一轮同样的遍历）。不做跳过区过滤——输入框运行中动态切换的
+          // placeholder 同样需要被翻到。
+          applyAttrs(mu.target);
         }
       }
     });

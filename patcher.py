@@ -103,7 +103,8 @@ OUT_DIR = _output_dir()
 # 缺失时退回"白名单"式的保守判定，不让 missing 直接崩掉）。
 try:
     _tools_dir = _resource_dir("tools")
-    sys.path.insert(0, str(_tools_dir)) if _tools_dir else None
+    if _tools_dir:
+        sys.path.insert(0, str(_tools_dir))
     from scan_filter import is_noise as _is_noise
 except Exception:
     # 不只 ImportError：scan_filter.py 若有语法/名字错误也会走到这里。
@@ -325,9 +326,8 @@ def _retry(func, attempts=5, delay=0.6):
             last = e
             if i < attempts - 1:          # 最后一轮失败直接抛，不再空等
                 time.sleep(delay)
-    if last is None:
-        raise ValueError("attempts 必须为正整数")
-    raise last
+    # attempts >= 1 时 last 必为异常；万一被写成 0，给出可读报错而不是裸 TypeError
+    raise last or RuntimeError("_retry 的 attempts 必须 >= 1")
 
 
 def ensure_closed(auto_yes, install):
@@ -360,11 +360,12 @@ def ensure_closed(auto_yes, install):
                    capture_output=True, check=False)
     # 等最多 10 秒让句柄释放。超时不中止：真正锁住 resources/app 的是主进程，
     # 残留的伴生进程交给后续的 _retry 与错误提示兜底。
+    leftover = []
     for _ in range(20):
         time.sleep(0.5)
-        if not running_processes() and not companion_left(target):
+        leftover = running_processes() + companion_left(target)
+        if not leftover:
             break
-    leftover = running_processes() + companion_left(target)
     if leftover:
         print(f"[提示] 仍有进程未退出（{'、'.join(leftover)}），继续尝试；若卡住请手动结束它们")
     else:
@@ -386,7 +387,9 @@ def load_dicts():
         try:
             # utf-8-sig 容忍带 BOM 的文件（记事本等编辑器可能写入），对无 BOM 文件无副作用
             data = json.loads(path.read_text(encoding="utf-8-sig"))
-        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        except (json.JSONDecodeError, UnicodeDecodeError, OSError) as e:
+            # OSError 也在这里收口：do_status 承诺"词典坏了也要把补丁状态打出来"，
+            # 而读不了文件（权限/杀软锁）同属"词典不可用"，不该让它逃出去崩掉。
             raise SystemExit(f"[错误] 词典文件解析失败：{path.name}\n"
                              f"        {e}\n"
                              "        修复或移除该文件后重试（所有 dict/*.json 都会被合并）。")
@@ -447,14 +450,10 @@ def build_js(template_name, replacements):
 
 
 def inject_block(app_dir, rel_path, block, marker, label):
-    """把代码块追加到文件末尾；若已存在同名块则截断后重写（支持词典热更新）。
+    """把代码块追加到文件末尾，返回是否注入成功。
 
-    返回是否注入成功。注入失败却照旧写"已汉化"标记是最坏的情况：
+    注入失败却照旧写"已汉化"标记是最坏的情况：
     界面全英文，而 status 报告一切正常。
-
-    "热更新"分支当前不可达（do_patch 注入前总是 rmtree + 全新解包，解出的
-    文件不可能已含 marker），保留作防御：万一未来恢复"不重建只更新"的
-    快速路径，热更新语义是现成的。
     """
     file_path = app_dir / rel_path
     if not file_path.exists():
@@ -462,10 +461,11 @@ def inject_block(app_dir, rel_path, block, marker, label):
         return False
     content = file_path.read_text(encoding="utf-8")
     if marker in content:
-        content = content[: content.index(marker)].rstrip()
-        action = "热更新"
-    else:
-        action = "注入"
+        # do_patch 注入前总是 rmtree + 全新解包，解出的文件不可能已含 marker。
+        # 真出现了说明目录不是全新状态，截断重写只会掩盖问题。
+        raise SystemExit(
+            f"[错误] {rel_path} 已含注入标记，解包目录不是全新状态。\n"
+            "        请运行 python patcher.py restore 还原官方原版后重试。")
     try:
         file_path.write_text(content + "\n\n" + marker + "\n" + block + "\n", encoding="utf-8")
     except OSError as e:
@@ -474,7 +474,7 @@ def inject_block(app_dir, rel_path, block, marker, label):
         raise SystemExit(
             f"[错误] 写入 {rel_path} 失败：{e}\n"
             "        该文件可能已被写坏，请运行 python patcher.py restore 还原官方原版后重试。")
-    print(f"[成功] {action}{label} -> {rel_path}")
+    print(f"[成功] 注入{label} -> {rel_path}")
     return True
 
 
@@ -896,6 +896,10 @@ def main():
     # 子 parser 用 SUPPRESS 作为默认值，避免它把主 parser 已解析的值覆盖成 None。
     sub_common = argparse.ArgumentParser(add_help=False)
     sub_common.add_argument("--dir", default=argparse.SUPPRESS, help=DIR_HELP)
+    # --debug 同样挂到子 parser：只挂主 parser 时 `patcher.py patch --debug`
+    # 会以 unrecognized arguments 退出，而"写在子命令后面"才是多数人的用法。
+    sub_common.add_argument("--debug", action="store_true",
+                            default=argparse.SUPPRESS, help="出错时打印完整 traceback")
 
     parser = argparse.ArgumentParser(description="Google Antigravity 桌面版中文汉化工具")
     parser.add_argument("--dir", help=DIR_HELP)

@@ -2,6 +2,9 @@ name: selfcheck
 
 on:
   push:
+    # 只跟 main：不加过滤时打 tag 也会触发，而 build-exe.yml 已经在 tag 上
+    # 跑过一遍 selfcheck，一次发版要白跑三遍。
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -32,6 +35,6 @@ jobs:
       - name: 提交前自检
         run: python tools/selfcheck.py
 
-      # 138 条翻译用例：Python 模拟层 + 真实 Node 引擎层
+      # 用例数会随补译增长，别写死
       - name: 词典与规则回归
         run: python tools/verify.py --from-dict

@@ -193,6 +193,9 @@
     ["1mo", "1个月前"],
     ["3mo ago", "3个月前"],
     ["2y", "2年前"],
-    ["1y ago", "1年前"]
+    ["1y ago", "1年前"],
+    ["Opens external link: https://example.com/$&x", "打开外部链接：https://example.com/$&x"],
+    ["You have used some of your weekly limit, it will fully refresh in 3 days.", "您已使用部分每周限额，它将在 3 天 后完全重置。"],
+    ["You have used some of your 5-hour limit, it will fully refresh in 2 hours, 30 minutes.", "您已使用部分五小时限额，它将在 2 小时 30 分钟 后完全重置。"]
   ]
 }

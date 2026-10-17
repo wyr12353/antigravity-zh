@@ -186,6 +186,8 @@ python tools/verify.py --from-dict  # 直接读 dict/*.json，不依赖安装目
 - `menus.json`（`menus`）— 原生菜单标签（Windows 上是系统托盘菜单；macOS 上是顶部菜单栏）
 - `ui_extra.json`（`exact`）— 早期批量提取的界面文案
 - `ui_v2191.json`（`exact`）— 按 `missing` 候选批量补译的界面文案（设置项说明、主题颜色描述、错误提示等）
+- `ui_v2230.json` / `ui_v2231.json`（`exact`）— 2.23.x 起按版本累积的 `scan` 实机补译
+  （状态标签、模型变更通知、插件目录卡片文案等）
 
 > `prefix_rules.json` 承载的段落名是 `rules`（历史命名），跟文件名并不字面一致。而模板
 > 规则那个文件原先也叫 `rules.json`，于是出现"文件名叫 rules、里面装的却是 `template`"

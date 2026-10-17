@@ -33,7 +33,12 @@
         try {
           var label = item.label && MENUS[item.label] ? MENUS[item.label] : item.label;
           var submenu = Array.isArray(item.submenu) ? item.submenu.map(translateItem) : item.submenu;
-          if (label === item.label && submenu === item.submenu) return item;
+          // map 必然返回新数组，直接 === 恒为假；逐元素比较才知道子树到底变没变，
+          // 否则任何带子菜单的项每次都会被白克隆一遍。
+          var same = submenu === item.submenu ||
+                     (Array.isArray(submenu) && submenu.length === item.submenu.length &&
+                      submenu.every(function (x, i) { return x === item.submenu[i]; }));
+          if (label === item.label && same) return item;
 
           var copy = Object.create(Object.getPrototypeOf(item));
           for (var k in item) {
@@ -76,6 +81,7 @@
       //    绝不能拿"仅本批"的内容覆盖写，否则历史积累会被整体抹掉。
       // 3) 临时文件带 pid，多实例同 scan 时不会互踩半截 JSON。
       var writeNow = function () {
+        if (!buffer.size) return;   // 没有待写内容就别读盘+重写整个文件
         var existing = new Map();
         try {
           var prev = JSON.parse(fs.readFileSync(OUT, "utf-8"));

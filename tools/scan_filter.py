@@ -12,6 +12,7 @@ JS 侧负责运行时实时拦截，本模块负责事后清洗与 merge_dict �
     python tools/scan_filter.py --check    # 只报告会被过滤掉的条目，不写文件
 """
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -118,10 +119,15 @@ def main():
         print("[提示] --check 模式未写入文件")
         return
 
+    original = OUT_FILE.read_text(encoding="utf-8")
     backup = OUT_FILE.with_suffix(".json.bak")
-    backup.write_text(OUT_FILE.read_text(encoding="utf-8"), encoding="utf-8")
+    backup.write_text(original, encoding="utf-8")
     data["strings"] = kept
-    OUT_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    # 必须原子写：这个文件正被主进程收集器并发读-改-写，就地覆盖会让它读到
+    # 半截 JSON，从而进入"现有数据不可读、本轮放弃写盘"的分支并就此停摆。
+    tmp = OUT_FILE.with_suffix(".json.clean.tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp, OUT_FILE)
     print(f"[完成] 已清洗 {OUT_FILE.name}，旧文件备份为 {backup.name}")
     print("[提示] 接着运行 python tools/merge_dict.py 逐条补充翻译")
 
