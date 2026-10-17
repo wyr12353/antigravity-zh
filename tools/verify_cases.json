@@ -185,6 +185,14 @@
     ["1m", "1分钟前"],
     ["1d", "1天前"],
     ["Select model, current: Gemini 4 Argon", "选择模型，当前: Gemini 4 Argon"],
-    ["1 active conversations", "1 个活跃对话"]
+    ["1 active conversations", "1 个活跃对话"],
+    ["Inherits your Global Permissions when working in these conversations.", "在这些对话中工作时继承您的全局权限。"],
+    ["Inherits your Global Permissions when working in this project.", "在此项目中工作时继承您的全局权限。"],
+    ["Toggle Maximize Auxiliary Pane", "切换辅助面板最大化"],
+    ["Toggle Auxiliary Pane", "切换辅助面板"],
+    ["1mo", "1个月前"],
+    ["3mo ago", "3个月前"],
+    ["2y", "2年前"],
+    ["1y ago", "1年前"]
   ]
 }
