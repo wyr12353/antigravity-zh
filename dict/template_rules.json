@@ -336,6 +336,51 @@
       "^Install (.+)$",
       "",
       "安装 $1"
+    ],
+    [
+      "^More actions for (.+)$",
+      "",
+      "更多操作：$1"
+    ],
+    [
+      "^Toggle ((?:[A-Z][A-Za-z0-9.+-]*)(?: [A-Z][A-Za-z0-9.+-]*){0,3})$",
+      "",
+      "切换 $1"
+    ],
+    [
+      "^(\\d+) tools? enabled$",
+      "",
+      "已启用 $1 个工具"
+    ],
+    [
+      "^(\\d+) tools? disabled$",
+      "",
+      "已禁用 $1 个工具"
+    ],
+    [
+      "^User uploaded media (\\d+)$",
+      "",
+      "用户上传的媒体 $1"
+    ],
+    [
+      "^Global: Installed in (.+)$",
+      "",
+      "全局：已安装于 $1"
+    ],
+    [
+      "^Global: Included by (.+)$",
+      "",
+      "全局：包含自 $1"
+    ],
+    [
+      "^Workspace: Installed in (.+)$",
+      "",
+      "工作区：已安装于 $1"
+    ],
+    [
+      "^Workspace: Included by (.+)$",
+      "",
+      "工作区：包含自 $1"
     ]
   ]
 }

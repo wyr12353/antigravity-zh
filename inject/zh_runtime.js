@@ -386,8 +386,13 @@
     // monaco/contenteditable 的最近命中是自身而非 article，不递归。
     if (inSkipZone(el)) {
       if (inArticleZone(el)) {
-        var zoneKids = el.children;
-        for (var zc = 0; zc < zoneKids.length; zc++) processElement(zoneKids[zc]);
+        // 传 childNodes 而不是 children：耗时条是叶子 span 里的文本节点，
+        // 只递归元素会漏掉它——流式渲染时经 MutationObserver 还能翻，
+        // 但从历史记录恢复的对话是整棵子树一次插入，耗时条会一直是英文。
+        // 走 processNode 后，文本节点只会命中 ELAPSED_NODE_RE 这一个白名单，
+        // 消息正文依旧不会被翻译。
+        var zoneKids = el.childNodes;
+        for (var zc = 0; zc < zoneKids.length; zc++) processNode(zoneKids[zc], false);
       }
       return;
     }

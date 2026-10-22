@@ -188,6 +188,9 @@ python tools/verify.py --from-dict  # 直接读 dict/*.json，不依赖安装目
 - `ui_v2191.json`（`exact`）— 按 `missing` 候选批量补译的界面文案（设置项说明、主题颜色描述、错误提示等）
 - `ui_v2230.json` / `ui_v2231.json`（`exact`）— 2.23.x 起按版本累积的 `scan` 实机补译
   （状态标签、模型变更通知、插件目录卡片文案等）
+- `ui_v2240.json`（`exact`）— 2.24.0 设置页被 React 拆成多节点的说明文字（逐碎片配对翻译）
+- `ui_v2250.json`（`exact`）— 2.25.0 新增的语音模式、插件账户、状态栏与历史页文案；
+  含插件详情页被拆开的 `tokens (` / `tokens)` 用量碎片
 
 > `prefix_rules.json` 承载的段落名是 `rules`（历史命名），跟文件名并不字面一致。而模板
 > 规则那个文件原先也叫 `rules.json`，于是出现"文件名叫 rules、里面装的却是 `template`"
