@@ -381,6 +381,16 @@
       "^Workspace: Included by (.+)$",
       "",
       "工作区：包含自 $1"
+    ],
+    [
+      "^Sort and filter conversations \\((\\d+) active\\)$",
+      "",
+      "排序和筛选对话（$1 项生效）"
+    ],
+    [
+      "^(\\d+) projects$",
+      "",
+      "$1 个项目"
     ]
   ]
 }
