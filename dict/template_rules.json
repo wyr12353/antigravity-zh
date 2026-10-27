@@ -391,6 +391,41 @@
       "^(\\d+) projects$",
       "",
       "$1 个项目"
+    ],
+    [
+      "^Add label for (.+)$",
+      "",
+      "为 $1 添加标签"
+    ],
+    [
+      "^Back to (.+)$",
+      "",
+      "返回 $1"
+    ],
+    [
+      "^Pending · WIP or no reviewers assigned$",
+      "",
+      "待处理 · 进行中或未分配审核者"
+    ],
+    [
+      "^In review · waiting on reviewers$",
+      "",
+      "审核中 · 等待审核者"
+    ],
+    [
+      "^In review · Code-Review (.+)$",
+      "",
+      "审核中 · 代码审核 $1"
+    ],
+    [
+      "^Approved · Code-Review (.+)$",
+      "",
+      "已批准 · 代码审核 $1"
+    ],
+    [
+      "^(\\d+) unresolved$",
+      "",
+      "$1 条未解决"
     ]
   ]
 }
