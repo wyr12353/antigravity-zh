@@ -268,6 +268,7 @@
     ["Log in to Google Drive", "登录 Google Drive"],
     ["Markdown view mode", "Markdown 视图模式"],
     ["Add screenshot to conversation", "将截图添加到对话"],
-    ["Couldn't connect", "无法连接"]
+    ["Couldn't connect", "无法连接"],
+    ["Extensions", "扩展"]
   ]
 }
