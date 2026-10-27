@@ -269,6 +269,8 @@
     ["Markdown view mode", "Markdown 视图模式"],
     ["Add screenshot to conversation", "将截图添加到对话"],
     ["Couldn't connect", "无法连接"],
-    ["Extensions", "扩展"]
+    ["Extensions", "扩展"],
+    ["Android Compose Preview", "Android Compose 预览"],
+    ["Android Device Hub", "Android 设备中心"]
   ]
 }

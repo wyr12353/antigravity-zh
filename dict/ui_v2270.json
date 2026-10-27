@@ -82,6 +82,8 @@
     "Merged": "已合并",
     ". To use another account, add it in the": "。如需使用其他账号，请在",
     "and make it the default.": "中将该账号设为默认。",
-    "Extensions": "扩展"
+    "Extensions": "扩展",
+    "Android Compose Preview": "Android Compose 预览",
+    "Android Device Hub": "Android 设备中心"
   }
 }
