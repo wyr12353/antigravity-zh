@@ -292,7 +292,7 @@
     ["Middle Click", "鼠标中键"],
     ["Show or Hide Extensions", "显示或隐藏扩展"],
     ["Search tabs, files, extensions, artifacts, commands...", "搜索标签页、文件、扩展、工件、命令..."],
-    ["Local Checkout", "本地检出"],
+    ["Local Checkout", "本地工作副本"],
     ["Shortcut Ctrl+K for Open Conversation Picker", "快捷键 Ctrl+K：打开对话选择器"],
     ["Shortcut Ctrl+Shift+⇥ for Previous Aux Pane Tab", "快捷键 Ctrl+Shift+⇥：上一个辅助窗格标签页"],
     ["Shortcut Ctrl+0 for Reset Zoom", "快捷键 Ctrl+0：重置缩放"],
