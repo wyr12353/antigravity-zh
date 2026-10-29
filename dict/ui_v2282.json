@@ -95,6 +95,8 @@
     "Uploads logs, settings, conversation summaries, and voice call traces to your Drive. Voice call traces are left out when telemetry is off.": "将日志、设置、对话摘要和语音通话记录上传到您的 Drive。关闭遥测时不会上传语音通话记录。",
     "Usage": "用量",
     "% left": "% 剩余",
+    "Permission Settings": "权限设置",
+    "Permission Details": "权限详情",
     "Use Google Sans instead of the default Inter typeface": "使用 Google Sans 替代默认的 Inter 字体",
     "Use the experimental visual themes instead of standard presets": "使用实验性视觉主题替代标准预设",
     "Valid until": "有效期至",

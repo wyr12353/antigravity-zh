@@ -303,6 +303,8 @@
     ["24h limit", "24 小时限额"],
     ["Resets in 3d 14h", "3天 14小时后重置"],
     ["Resets in 4h 15m", "4小时 15分后重置"],
-    ["Resets in <1m", "不到 1 分钟后重置"]
+    ["Resets in <1m", "不到 1 分钟后重置"],
+    ["Permission Settings", "权限设置"],
+    ["Permission Details", "权限详情"]
   ]
 }
