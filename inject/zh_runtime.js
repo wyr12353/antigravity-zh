@@ -225,7 +225,13 @@
     [/^Save rule to always allow (.+)\?$/, function (m) { return saveRuleZh(m[1]); }],
     // 快捷键行的 aria-label："Shortcut Ctrl+K for Open Conversation Picker"。
     // 键位必须原样保留，动作名先查词典再拼中文；换绑后同一个动作仍能翻译。
-    [/^Shortcut (.+) for (.+)$/, function (m) { return "快捷键 " + m[1] + "：" + (EXACT[m[2]] || m[2]); }]
+    [/^Shortcut (.+) for (.+)$/, function (m) { return "快捷键 " + m[1] + "：" + (EXACT[m[2]] || m[2]); }],
+    // 用量弹层的重置时间："Resets in 3d 14h" / "4h 15m" / "<1m"。
+    // 时长复用 elapsedZh 的 数字+单位 整体替换，避免留下 "3d 14h" 英文缩写。
+    [/^Resets in (.+)$/, function (m) {
+      if (m[1] === "<1m") return "不到 1 分钟后重置";
+      return elapsedZh(m[1]) + "后重置";
+    }]
   ];
 
   // ---------- 规则表：子串命中后做替换 ----------

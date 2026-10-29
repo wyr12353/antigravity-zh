@@ -74,6 +74,36 @@ def duration_zh(s):
     return s.replace(",", "")
 
 
+def elapsed_zh(s):
+    """与 zh_runtime.js 的 elapsedZh 使用同一套正则（数字+单位整体替换）。
+
+    用量弹层的 "Resets in 3d 14h" 会走到这里；不能只替换 d/h 字母，
+    否则 "3d" 会被拆坏。"""
+    def repl(m):
+        num, unit = m.group(1), m.group(2).lower()
+        if unit == "ms" or unit.startswith("millisecond"):
+            zh = "毫秒"
+        elif unit == "s" or unit.startswith("sec"):
+            zh = "秒"
+        elif unit.startswith("minute"):
+            zh = "分钟"
+        elif unit == "m" or unit.startswith("min"):
+            zh = "分"
+        elif unit.startswith("hour"):
+            zh = "小时"
+        elif unit.startswith("day") or unit == "d":
+            zh = "天"
+        elif unit.startswith("week"):
+            zh = "周"
+        else:
+            zh = "小时"
+        return num + zh
+
+    return re.sub(
+        r"(\d+(?:\.\d+)?)\s*(ms|milliseconds?|weeks?|secs?|seconds?|s|mins?|minutes?|m|hrs?|hours?|days?|d|h)\b",
+        repl, s, flags=re.I)
+
+
 def run_js_check(dicts, cases):
     """把同一批用例交给真实 Node 引擎跑一遍，捕捉 Python 模拟层抓不到的问题
     （例如模板里的 $1 在字符串 pattern 下不会被解析）。node 不可用时跳过。"""
@@ -149,7 +179,7 @@ def make_translate(dicts):
     def limit(prefix_zh, m):
         return prefix_zh + duration_zh(m.group(1)) + " 后完全重置。"
 
-    # 与 zh_runtime.js 的 FN_RULES 一一对应。运行时那 6 条由 JS 函数实现，
+    # 与 zh_runtime.js 的 FN_RULES 一一对应。运行时那 7 条由 JS 函数实现，
     # 这里用等价的正则 + 字符串拼接表达。词典查找都用 .get(...)+truthy，
     # 与 JS 的真值判断一致（空串译值视为未命中）。
     fn_rules = (
@@ -166,6 +196,9 @@ def make_translate(dicts):
          else ("保存规则以始终允许 " + m.group(1) + " 吗？")),
         (r"^Shortcut (.+) for (.+)$",
          lambda m: "快捷键 " + m.group(1) + "：" + (exact.get(m.group(2)) or m.group(2))),
+        (r"^Resets in (.+)$",
+         lambda m: "不到 1 分钟后重置" if m.group(1) == "<1m"
+         else elapsed_zh(m.group(1)) + "后重置"),
     )
 
     def translate(text):

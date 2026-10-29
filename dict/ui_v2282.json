@@ -93,6 +93,8 @@
     "This Computer": "此计算机",
     "This permanently deletes all of your Remote Agents conversations, projects, scheduled tasks, connected plugins and settings, and stops any running remote agents. It can't be undone. Data in the desktop app and your Google account are not affected, and you can keep using Remote Agents afterwards.": "此操作将永久删除您所有的 Remote Agents 对话、项目、计划任务、已连接插件和设置，并停止所有正在运行的远程智能体。此操作无法撤销。桌面应用与 Google 账号中的数据不受影响，之后您仍可继续使用 Remote Agents。",
     "Uploads logs, settings, conversation summaries, and voice call traces to your Drive. Voice call traces are left out when telemetry is off.": "将日志、设置、对话摘要和语音通话记录上传到您的 Drive。关闭遥测时不会上传语音通话记录。",
+    "Usage": "用量",
+    "% left": "% 剩余",
     "Use Google Sans instead of the default Inter typeface": "使用 Google Sans 替代默认的 Inter 字体",
     "Use the experimental visual themes instead of standard presets": "使用实验性视觉主题替代标准预设",
     "Valid until": "有效期至",

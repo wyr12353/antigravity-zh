@@ -296,6 +296,13 @@
     ["Shortcut Ctrl+K for Open Conversation Picker", "快捷键 Ctrl+K：打开对话选择器"],
     ["Shortcut Ctrl+Shift+⇥ for Previous Aux Pane Tab", "快捷键 Ctrl+Shift+⇥：上一个辅助窗格标签页"],
     ["Shortcut Ctrl+0 for Reset Zoom", "快捷键 Ctrl+0：重置缩放"],
-    ["Shortcut Alt+Shift+↑ for Move Conversation Up", "快捷键 Alt+Shift+↑：上移对话"]
+    ["Shortcut Alt+Shift+↑ for Move Conversation Up", "快捷键 Alt+Shift+↑：上移对话"],
+    ["Usage", "用量"],
+    ["% left", "% 剩余"],
+    ["5h limit", "5 小时限额"],
+    ["24h limit", "24 小时限额"],
+    ["Resets in 3d 14h", "3天 14小时后重置"],
+    ["Resets in 4h 15m", "4小时 15分后重置"],
+    ["Resets in <1m", "不到 1 分钟后重置"]
   ]
 }
