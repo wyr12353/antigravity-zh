@@ -222,7 +222,10 @@
     // 若直接用模板把 $1 原样嵌入，运行时拼接的句子会永远半中半英
     // （"允许 running this command 吗？"）。
     [/^Allow (.+)\?$/, function (m) { return allowZh(m[1]); }],
-    [/^Save rule to always allow (.+)\?$/, function (m) { return saveRuleZh(m[1]); }]
+    [/^Save rule to always allow (.+)\?$/, function (m) { return saveRuleZh(m[1]); }],
+    // 快捷键行的 aria-label："Shortcut Ctrl+K for Open Conversation Picker"。
+    // 键位必须原样保留，动作名先查词典再拼中文；换绑后同一个动作仍能翻译。
+    [/^Shortcut (.+) for (.+)$/, function (m) { return "快捷键 " + m[1] + "：" + (EXACT[m[2]] || m[2]); }]
   ];
 
   // ---------- 规则表：子串命中后做替换 ----------
