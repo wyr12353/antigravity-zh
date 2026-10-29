@@ -10,14 +10,22 @@ on:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         # 3.9 是 README 声称的最低支持版本（源码里要求最高的 API 是
         # Path.is_relative_to，3.9 新增），光在文档里声称而不实际跑等于没验证；
         # 3.11 与 build-exe.yml 的打包环境保持一致。
-        python-version: ["3.9", "3.11"]
+        #
+        # ubuntu-latest 已升到 26.04，actions/setup-python 没有对应的 3.9
+        # 构建（报 "version '3.9' ... not found for Ubuntu 26.04"），所以
+        # 最低版本这一格固定到仍有 3.9 的 24.04；3.11 继续跟 latest。
+        include:
+          - python-version: "3.9"
+            os: ubuntu-24.04
+          - python-version: "3.11"
+            os: ubuntu-latest
     steps:
       # 各 action 统一到当前最新主版本（后续由 Dependabot 跟进）。
       # 早先的 v4 / v5 那一代跑在 Node 20 上，runner 会报
