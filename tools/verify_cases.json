@@ -312,6 +312,10 @@
     ["Welcome back, Example. Where should we pick up?", "欢迎回来，Example。我们从哪里继续？"],
     ["Knowledge Work", "知识工作"],
     ["Toggle Side Panel", "切换侧边面板"],
-    ["Verbose", "详细"]
+    ["Verbose", "详细"],
+    ["This project was created for", "创建此项目是为了运行"],
+    ["the", "该"],
+    ["an", "一个"],
+    ["automation.", "自动化。"]
   ]
 }
