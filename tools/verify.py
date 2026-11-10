@@ -179,7 +179,7 @@ def make_translate(dicts):
     def limit(prefix_zh, m):
         return prefix_zh + duration_zh(m.group(1)) + " 后完全重置。"
 
-    # 与 zh_runtime.js 的 FN_RULES 一一对应。运行时那 7 条由 JS 函数实现，
+    # 与 zh_runtime.js 的 FN_RULES 一一对应。运行时那 9 条由 JS 函数实现，
     # 这里用等价的正则 + 字符串拼接表达。词典查找都用 .get(...)+truthy，
     # 与 JS 的真值判断一致（空串译值视为未命中）。
     fn_rules = (
@@ -196,6 +196,10 @@ def make_translate(dicts):
          else ("保存规则以始终允许 " + m.group(1) + " 吗？")),
         (r"^Shortcut (.+) for (.+)$",
          lambda m: "快捷键 " + m.group(1) + "：" + (exact.get(m.group(2)) or m.group(2))),
+        (r"^Remove shortcut (.+) for (.+)$",
+         lambda m: "移除快捷键 " + m.group(1) + "：" + (exact.get(m.group(2)) or m.group(2))),
+        (r"^Add shortcut for (.+)$",
+         lambda m: "为「" + (exact.get(m.group(1)) or m.group(1)) + "」添加快捷键"),
         (r"^Resets in (.+)$",
          lambda m: "不到 1 分钟后重置" if m.group(1) == "<1m"
          else elapsed_zh(m.group(1)) + "后重置"),

@@ -226,6 +226,9 @@
     // 快捷键行的 aria-label："Shortcut Ctrl+K for Open Conversation Picker"。
     // 键位必须原样保留，动作名先查词典再拼中文；换绑后同一个动作仍能翻译。
     [/^Shortcut (.+) for (.+)$/, function (m) { return "快捷键 " + m[1] + "：" + (EXACT[m[2]] || m[2]); }],
+    // 快捷键编辑器里还有“移除/添加快捷键”的 aria-label
+    [/^Remove shortcut (.+) for (.+)$/, function (m) { return "移除快捷键 " + m[1] + "：" + (EXACT[m[2]] || m[2]); }],
+    [/^Add shortcut for (.+)$/, function (m) { return "为「" + (EXACT[m[1]] || m[1]) + "」添加快捷键"; }],
     // 用量弹层的重置时间："Resets in 3d 14h" / "4h 15m" / "<1m"。
     // 时长复用 elapsedZh 的 数字+单位 整体替换，避免留下 "3d 14h" 英文缩写。
     [/^Resets in (.+)$/, function (m) {
@@ -291,7 +294,9 @@
   }
 
   // ---------- 核心：翻译一段文本 ----------
-  function translateText(text, el) {
+  // fromAttr：来自 placeholder/title/aria-label 等属性。属性文本与可见文本
+  // 可能不同，弱匹配的“整节点”守卫不能拿可见文本去比较。
+  function translateText(text, el, fromAttr) {
     if (!text || typeof text !== "string") return text;
     var trimmed = text.trim();
     if (!trimmed) return text;
@@ -322,10 +327,14 @@
       if (text.indexOf(PREFIX_RULES[p][0]) !== -1) return PREFIX_RULES[p][1];
     }
 
-    // ≤3 个词的短文案走弱匹配词表
+    // ≤3 个词的短文案走弱匹配词表。
+    // 只在整个节点就是该短文本时命中：像 "No automations yet" 这种由多个
+    // 文本节点拼成的句子，若先把 "No " 翻成"否"，容器级整句匹配就再也
+    // 命中不了（文本已含中文，translateText 直接跳过）。
     if (trimmed.split(/\s+/).length <= 3) {
       var lower = trimmed.toLowerCase();
-      if (WORDS[lower]) return putBack(text, trimmed, WORDS[lower]);
+      var wholeNode = fromAttr || !el || !el.textContent || el.textContent.trim() === trimmed;
+      if (WORDS[lower] && wholeNode) return putBack(text, trimmed, WORDS[lower]);
     }
 
     if (SCAN) collector.miss(text, el);
@@ -367,20 +376,20 @@
     // 本函数对整片 DOM 的每个元素都会调用，先做标签守卫省下这次查找。
     var isField = el.tagName === "INPUT" || el.tagName === "TEXTAREA";
     if (isField && el.placeholder) {
-      var p = translateText(el.placeholder, el);
+      var p = translateText(el.placeholder, el, true);
       if (p !== el.placeholder) el.placeholder = p;
     }
     for (var ai = 0; ai < TRANSLATED_ATTRS.length; ai++) {
       var attrName = TRANSLATED_ATTRS[ai];
       var attrVal = el.getAttribute ? el.getAttribute(attrName) : null;
       if (attrVal) {
-        var attrZh = translateText(attrVal, el);
+        var attrZh = translateText(attrVal, el, true);
         if (attrZh !== attrVal) el.setAttribute(attrName, attrZh);
       }
     }
     // 按钮的可见文本走 value property（非 attribute），单独处理
     if (el.tagName === "INPUT" && (el.type === "button" || el.type === "submit" || el.type === "reset") && el.value) {
-      var v = translateText(el.value, el);
+      var v = translateText(el.value, el, true);
       if (v !== el.value) el.value = v;
     }
   }

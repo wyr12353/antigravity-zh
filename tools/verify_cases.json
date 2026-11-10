@@ -305,6 +305,13 @@
     ["Resets in 4h 15m", "4小时 15分后重置"],
     ["Resets in <1m", "不到 1 分钟后重置"],
     ["Permission Settings", "权限设置"],
-    ["Permission Details", "权限详情"]
+    ["Permission Details", "权限详情"],
+    ["No automations yet", "尚无自动化。"],
+    ["Remove shortcut Ctrl+K for Open Conversation Picker", "移除快捷键 Ctrl+K：打开对话选择器"],
+    ["Add shortcut for Open Conversation Picker", "为「打开对话选择器」添加快捷键"],
+    ["Welcome back, Example. Where should we pick up?", "欢迎回来，Example。我们从哪里继续？"],
+    ["Knowledge Work", "知识工作"],
+    ["Toggle Side Panel", "切换侧边面板"],
+    ["Verbose", "详细"]
   ]
 }
