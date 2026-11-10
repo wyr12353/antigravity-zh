@@ -320,6 +320,10 @@
     ["This conversation grew too large, so the history before this point may be missing or incomplete.", "此对话内容过多，因此此处之前的历史记录可能缺失或不完整。"],
     ["Good to see you, Example. What's next?", "很高兴见到您，Example。接下来做什么？"],
     ["Fork Environment Notice", "分叉环境通知"],
-    ["System Message", "系统消息"]
+    ["System Message", "系统消息"],
+    ["Sonnet 5.5 is now available on paid Pro and Ultra plans. Third-party model access will no longer be available on your current plan starting on November 18, 2026.", "Sonnet 5.5 现已在付费 Pro 与 Ultra 计划中提供。自 2026 年 11 月 18 日 起，您当前的计划将不再支持第三方模型访问。"],
+    ["Opus 5.5 is now available on paid Pro and Ultra plans. Third-party model access will no longer be available on your current plan starting on November 18, 2026.", "Opus 5.5 现已在付费 Pro 与 Ultra 计划中提供。自 2026 年 11 月 18 日 起，您当前的计划将不再支持第三方模型访问。"],
+    ["GPT-OSS will be removed from Antigravity on November 18, 2026.", "GPT-OSS 将于 2026 年 11 月 18 日 从 Antigravity 中移除。"],
+    ["Hey Example, what should we build today?", "嗨，Example，今天想构建什么？"]
   ]
 }

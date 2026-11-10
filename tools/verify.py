@@ -104,6 +104,21 @@ def elapsed_zh(s):
         repl, s, flags=re.I)
 
 
+MONTHS_ZH = {
+    "january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6,
+    "july": 7, "august": 8, "september": 9, "october": 10, "november": 11, "december": 12,
+}
+
+
+def date_zh(s):
+    """与 zh_runtime.js 的 dateZh 一致：November 18, 2026 -> 2026 年 11 月 18 日。"""
+    m = re.match(r"^([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})$", s.strip())
+    if not m:
+        return s
+    month = MONTHS_ZH.get(m.group(1).lower())
+    return f"{m.group(3)} 年 {month} 月 {m.group(2)} 日" if month else s
+
+
 def run_js_check(dicts, cases):
     """把同一批用例交给真实 Node 引擎跑一遍，捕捉 Python 模拟层抓不到的问题
     （例如模板里的 $1 在字符串 pattern 下不会被解析）。node 不可用时跳过。"""
@@ -179,7 +194,7 @@ def make_translate(dicts):
     def limit(prefix_zh, m):
         return prefix_zh + duration_zh(m.group(1)) + " 后完全重置。"
 
-    # 与 zh_runtime.js 的 FN_RULES 一一对应。运行时那 9 条由 JS 函数实现，
+    # 与 zh_runtime.js 的 FN_RULES 一一对应。运行时那 12 条由 JS 函数实现，
     # 这里用等价的正则 + 字符串拼接表达。词典查找都用 .get(...)+truthy，
     # 与 JS 的真值判断一致（空串译值视为未命中）。
     fn_rules = (
@@ -203,6 +218,12 @@ def make_translate(dicts):
         (r"^Resets in (.+)$",
          lambda m: "不到 1 分钟后重置" if m.group(1) == "<1m"
          else elapsed_zh(m.group(1)) + "后重置"),
+        (r"^Sonnet 5\.5 is now available on paid Pro and Ultra plans\. Third-party model access will no longer be available on your current plan starting on (.+)\.$",
+         lambda m: "Sonnet 5.5 现已在付费 Pro 与 Ultra 计划中提供。自 " + date_zh(m.group(1)) + " 起，您当前的计划将不再支持第三方模型访问。"),
+        (r"^Opus 5\.5 is now available on paid Pro and Ultra plans\. Third-party model access will no longer be available on your current plan starting on (.+)\.$",
+         lambda m: "Opus 5.5 现已在付费 Pro 与 Ultra 计划中提供。自 " + date_zh(m.group(1)) + " 起，您当前的计划将不再支持第三方模型访问。"),
+        (r"^GPT-OSS will be removed from Antigravity on (.+)\.$",
+         lambda m: "GPT-OSS 将于 " + date_zh(m.group(1)) + " 从 Antigravity 中移除。"),
     )
 
     def translate(text):

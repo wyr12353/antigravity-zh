@@ -476,6 +476,11 @@
       "^Good to see you, (.+)\\. What's next\\?$",
       "",
       "很高兴见到您，$1。接下来做什么？"
+    ],
+    [
+      "^Hey (.+), what should we build today\\?$",
+      "",
+      "嗨，$1，今天想构建什么？"
     ]
   ]
 }

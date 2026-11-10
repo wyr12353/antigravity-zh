@@ -214,6 +214,19 @@
     });
   }
 
+  // "November 18, 2026" → "2026 年 11 月 18 日"。
+  // 模型下架通知的日期由服务端下发，会随批次变化；用规则解析而不是写死日期。
+  var MONTHS = {
+    january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
+    july: 7, august: 8, september: 9, october: 10, november: 11, december: 12
+  };
+  function dateZh(s) {
+    var m = String(s).trim().match(/^([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})$/);
+    if (!m) return s;
+    var month = MONTHS[m[1].toLowerCase()];
+    return month ? m[3] + " 年 " + month + " 月 " + m[2] + " 日" : s;
+  }
+
   var FN_RULES = [
     [/^Learn more about (.+)$/, function (m) { return "了解更多关于 " + (EXACT[m[1]] || m[1]) + " 的信息"; }],
     [/^You have used some of your weekly limit, it will fully refresh in (.*)\.$/, function (m) { return "您已使用部分每周限额，它将在 " + durationZh(m[1]) + " 后完全重置。"; }],
@@ -234,6 +247,17 @@
     [/^Resets in (.+)$/, function (m) {
       if (m[1] === "<1m") return "不到 1 分钟后重置";
       return elapsedZh(m[1]) + "后重置";
+    }],
+    // 模型下架通知由服务端下发，日期会随批次变化（2.28 是 11 月 2 日，
+    // 2.31 已改成 11 月 18 日）。抓日期再本地化，避免每次改日期都失效。
+    [/^Sonnet 5\.5 is now available on paid Pro and Ultra plans\. Third-party model access will no longer be available on your current plan starting on (.+)\.$/, function (m) {
+      return "Sonnet 5.5 现已在付费 Pro 与 Ultra 计划中提供。自 " + dateZh(m[1]) + " 起，您当前的计划将不再支持第三方模型访问。";
+    }],
+    [/^Opus 5\.5 is now available on paid Pro and Ultra plans\. Third-party model access will no longer be available on your current plan starting on (.+)\.$/, function (m) {
+      return "Opus 5.5 现已在付费 Pro 与 Ultra 计划中提供。自 " + dateZh(m[1]) + " 起，您当前的计划将不再支持第三方模型访问。";
+    }],
+    [/^GPT-OSS will be removed from Antigravity on (.+)\.$/, function (m) {
+      return "GPT-OSS 将于 " + dateZh(m[1]) + " 从 Antigravity 中移除。";
     }]
   ];
 
