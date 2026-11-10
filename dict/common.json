@@ -505,7 +505,7 @@
     "Theme": "主题",
     "There are no customizations enabled.": "当前未启用任何自定义项。",
     "Thinking...": "思考中...",
-    "This conversation grew too large, so the history before this point may be missing or incomplete.": "此对话过大，因此此前历史可能缺失或不完整。",
+    "This conversation grew too large, so the history before this point may be missing or incomplete.": "此对话内容过多，因此此处之前的历史记录可能缺失或不完整。",
     "This month": "本月",
     "This redo action will not make any code changes.": "此重做操作不会对代码做出任何更改。",
     "This skill came from the marketplace, so you can add it again whenever you need it.": "此技能来自应用市场，需要时可随时重新添加。",

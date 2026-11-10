@@ -471,6 +471,11 @@
       "^Welcome back, (.+)\\. Where should we pick up\\?$",
       "",
       "欢迎回来，$1。我们从哪里继续？"
+    ],
+    [
+      "^Good to see you, (.+)\\. What's next\\?$",
+      "",
+      "很高兴见到您，$1。接下来做什么？"
     ]
   ]
 }

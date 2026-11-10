@@ -448,6 +448,16 @@
         // "Worked for 3 hours, still failing" 这类正文被截成半中半英。
         if (inArticleZone(parent)) {
           var raw = node.textContent || "";
+          // 客户端固定的通知/系统消息是界面文案，不是用户内容。只对已知
+          // data-testid 的容器放行，普通消息正文仍然不碰。
+          // cleared-step-notice：上下文过大提示；cascade-system-message-toolbar：
+          // Goal Verification / Idle Guard Warning / Fork Environment Notice 等标题。
+          var noticeEl = parent.closest && parent.closest('[data-testid="cleared-step-notice"], [data-testid="cascade-system-message-toolbar"]');
+          if (noticeEl) {
+            var noticeZh = translateText(raw, parent);
+            if (noticeZh !== raw) node.textContent = noticeZh;
+            return;
+          }
           // 整节点必须就是一个耗时条才动它（见 ELAPSED_NODE_RE 处的说明）
           if (ELAPSED_NODE_RE.test(raw)) {
             var tsZh = elapsedTranslate(raw);
