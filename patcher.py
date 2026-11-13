@@ -777,6 +777,13 @@ def do_missing(install, top, keep):
     log_text = LOG_REL.read_text(encoding="utf-8", errors="replace")
     ports = re.findall(r"Local:\s+https://127\.0\.0\.1:(\d+)/", log_text)
     if not ports:
+        # 2.31.2 起 main.log 不再输出 "Local: https://..." 行。语言服务器日志
+        # 仍会打印 "listening on random port at <port> for HTTPS/HTTP"，
+        # 两个端口都作为候选（gRPC 与 HTTP 哪个托管界面 bundle 由探测决定）。
+        ls_log = LOG_REL.parent / "language_server.log"
+        ls_text = ls_log.read_text(encoding="utf-8", errors="replace") if ls_log.exists() else ""
+        ports = re.findall(r"listening on random port at (\d+) for", ls_text)
+    if not ports:
         raise SystemExit("[错误] 日志里没有本地服务端口记录，请先启动 Antigravity")
 
     bundle_path = OUT_DIR / "main-bundle.js"
