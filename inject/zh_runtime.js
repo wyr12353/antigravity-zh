@@ -41,7 +41,11 @@
   // 模型输出与思维链是"内容"而非界面：流式渲染会把一句话拆成大量碎片节点，
   // 词典里的短词条与弱匹配词表会命中碎片，产出中英混杂的乱翻文本。
   // 因此内容区整体跳过；耗时时间戳等界面性信息由 processNode 的白名单特例处理。
-  var SKIP_SEL = "pre, code, textarea, input, script, style, .monaco-editor, [contenteditable], [role=textbox], [role=searchbox], [role=article]";
+  // 语音字幕的五个容器也整体跳过：nTc 会把整行按 /\S+|\s+/g 拆成逐词 span
+  // （朗读进度高亮），每个词都是独立文本节点，不跳过会被词典里的单字词条
+  // （the/an/and/All/Ready…）和弱匹配逐词命中，把用户说的话翻成中英混杂。
+  // 这些是用户/智能体说出来的内容，与消息正文同理，不属于界面文案。
+  var SKIP_SEL = "pre, code, textarea, input, script, style, .monaco-editor, [contenteditable], [role=textbox], [role=searchbox], [role=article], [data-testid=\"voice-user-message\"], [data-testid=\"voice-agent-message\"], [data-testid=\"voice-chat-marker\"], [data-testid=\"live-user-turn\"], [data-testid=\"live-agent-turn\"]";
 
   // ---------- 收集器（scan 模式）----------
   var collector = null;
