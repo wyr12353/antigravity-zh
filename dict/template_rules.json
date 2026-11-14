@@ -481,6 +481,11 @@
       "^Hey (.+), what should we build today\\?$",
       "",
       "嗨，$1，今天想构建什么？"
+    ],
+    [
+      "^Resume (\\d+) comment drafts?$",
+      "",
+      "恢复 $1 条评论草稿"
     ]
   ]
 }

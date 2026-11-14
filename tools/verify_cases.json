@@ -324,6 +324,15 @@
     ["Sonnet 5.5 is now available on paid Pro and Ultra plans. Third-party model access will no longer be available on your current plan starting on November 18, 2026.", "Sonnet 5.5 现已在付费 Pro 与 Ultra 计划中提供。自 2026 年 11 月 18 日 起，您当前的计划将不再支持第三方模型访问。"],
     ["Opus 5.5 is now available on paid Pro and Ultra plans. Third-party model access will no longer be available on your current plan starting on November 18, 2026.", "Opus 5.5 现已在付费 Pro 与 Ultra 计划中提供。自 2026 年 11 月 18 日 起，您当前的计划将不再支持第三方模型访问。"],
     ["GPT-OSS will be removed from Antigravity on November 18, 2026.", "GPT-OSS 将于 2026 年 11 月 18 日 从 Antigravity 中移除。"],
-    ["Hey Example, what should we build today?", "嗨，Example，今天想构建什么？"]
+    ["Hey Example, what should we build today?", "嗨，Example，今天想构建什么？"],
+    ["Connect to SSH Host", "连接到 SSH 主机"],
+    ["SSH Config", "SSH 配置"],
+    ["No matching hosts", "没有匹配的主机"],
+    ["All agents", "所有智能体"],
+    ["Stop all agents", "停止所有智能体"],
+    ["Stream ended", "流已结束"],
+    ["Switch to This Computer", "切换到此计算机"],
+    ["Waiting for the SSH connection to finish", "等待 SSH 连接完成"],
+    ["Resume 2 comment drafts", "恢复 2 条评论草稿"]
   ]
 }
