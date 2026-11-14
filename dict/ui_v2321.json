@@ -68,6 +68,8 @@
     "This page is not allowed in previews.": "预览中不允许此页面。",
     "Use Default": "使用默认",
     "View MCP servers": "查看 MCP 服务器",
-    "Waiting for the SSH connection to finish": "等待 SSH 连接完成"
+    "Waiting for the SSH connection to finish": "等待 SSH 连接完成",
+    "Choose Antigravity's Voice": "选择 Antigravity 的声音",
+    "Use": "使用"
   }
 }
