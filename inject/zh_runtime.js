@@ -220,6 +220,9 @@
 
   // "November 18, 2026" → "2026 年 11 月 18 日"。
   // 模型下架通知的日期由服务端下发，会随批次变化；用规则解析而不是写死日期。
+  // MONTHS 查找必须 hasOwnProperty：服务器串里的 "constructor" 等词若命中
+  // Object.prototype，会把函数源码拼进译文（与 nullProto 同理，这里改不了
+  // 字面量形态，用显式守卫）。
   var MONTHS = {
     january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
     july: 7, august: 8, september: 9, october: 10, november: 11, december: 12
@@ -227,8 +230,9 @@
   function dateZh(s) {
     var m = String(s).trim().match(/^([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})$/);
     if (!m) return s;
-    var month = MONTHS[m[1].toLowerCase()];
-    return month ? m[3] + " 年 " + month + " 月 " + m[2] + " 日" : s;
+    var key = m[1].toLowerCase();
+    if (!Object.prototype.hasOwnProperty.call(MONTHS, key)) return s;
+    return m[3] + " 年 " + MONTHS[key] + " 月 " + m[2] + " 日";
   }
 
   var FN_RULES = [

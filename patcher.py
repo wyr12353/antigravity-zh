@@ -775,14 +775,16 @@ def do_missing(install, top, keep):
     if not LOG_REL.exists():
         raise SystemExit(f"[错误] 找不到日志 {LOG_REL}，请先启动一次 Antigravity")
     log_text = LOG_REL.read_text(encoding="utf-8", errors="replace")
-    ports = re.findall(r"Local:\s+https://127\.0\.0\.1:(\d+)/", log_text)
+    # 候选统一为 (scheme, port)。main.log 时代只有 https；
+    # 2.31.2 起 main.log 不再输出 "Local: https://..." 行，改从语言服务器日志
+    # 解析 "listening on random port at <port> for HTTPS/HTTP"——两个端口协议
+    # 不同（gRPC 走 HTTPS，HTTP 端口是明文），探测时必须按各自协议请求。
+    ports = [("https", p) for p in re.findall(r"Local:\s+https://127\.0\.0\.1:(\d+)/", log_text)]
     if not ports:
-        # 2.31.2 起 main.log 不再输出 "Local: https://..." 行。语言服务器日志
-        # 仍会打印 "listening on random port at <port> for HTTPS/HTTP"，
-        # 两个端口都作为候选（gRPC 与 HTTP 哪个托管界面 bundle 由探测决定）。
         ls_log = LOG_REL.parent / "language_server.log"
         ls_text = ls_log.read_text(encoding="utf-8", errors="replace") if ls_log.exists() else ""
-        ports = re.findall(r"listening on random port at (\d+) for", ls_text)
+        for port, scheme in re.findall(r"listening on random port at (\d+) for (HTTPS|HTTP)", ls_text):
+            ports.append(("https" if scheme.upper() == "HTTPS" else "http", port))
     if not ports:
         raise SystemExit("[错误] 日志里没有本地服务端口记录，请先启动 Antigravity")
 
@@ -798,10 +800,10 @@ def do_missing(install, top, keep):
     data = None
     used_port = None
     tried = []
-    for candidate in reversed(ports[-5:]):
-        tried.append(candidate)
+    for scheme, candidate in reversed(ports[-5:]):
+        tried.append(f"{scheme}://{candidate}")
         try:
-            with urllib.request.urlopen(f"https://127.0.0.1:{candidate}/main.js",
+            with urllib.request.urlopen(f"{scheme}://127.0.0.1:{candidate}/main.js",
                                         context=ctx, timeout=8) as resp:
                 ctype = resp.headers.get("content-type", "") or ""
                 body = resp.read()

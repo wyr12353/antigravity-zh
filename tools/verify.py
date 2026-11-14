@@ -251,10 +251,12 @@ def make_translate(dicts):
             if m:
                 # 用 re.sub 按捕获组精确替换：早先的循环 replace("$1", ...) 会把
                 # "$10" 当成 "$1" 后接 "0" 处理，产出错误译文。组号越界时 JS 的
-                # String.replace 保留字面 "$n"，这里对齐而不是裸抛 IndexError。
+                # String.replace 保留字面 "$n"，这里对齐而不是拿整句匹配顶上。
                 def group(mm):
                     idx = int(mm.group(1))
-                    return m.group(idx) if idx <= m.re.groups else mm.group(0)
+                    if idx <= m.re.groups:
+                        return m.group(idx)
+                    return "$" + mm.group(1)   # JS 对越界 $n 保留字面
                 replaced = re.sub(r"\$(\d+)", group, tpl)
                 if replaced != trimmed:
                     return sub(replaced)

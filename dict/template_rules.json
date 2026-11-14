@@ -28,11 +28,6 @@
       "$1 个任务运行中"
     ],
     [
-      "^Select one of the .+$",
-      "",
-      "请从中选择一个"
-    ],
-    [
       "^There was an error with your authentication\\. To log in, click (.+)$",
       "",
       "您的身份验证出现问题。要登录，请点击 $1"
@@ -43,19 +38,9 @@
       "选择环境（$1）"
     ],
     [
-      "^Switch to the (.+)$",
-      "",
-      "切换到 $1"
-    ],
-    [
       "^There are currently no Build with (.+)$",
       "",
       "当前没有使用 $1 的 Build"
-    ],
-    [
-      "^This project was created for (.+)$",
-      "",
-      "此项目是为 $1 创建的"
     ],
     [
       "^This will permanently delete (.+)$",
@@ -71,11 +56,6 @@
       "^Add New Handler to (.+)$",
       "",
       "向 $1 添加新处理器"
-    ],
-    [
-      "^Are you sure you want to archive (.+)\\?$",
-      "",
-      "您确定要归档 $1 吗？"
     ],
     [
       "^Are you sure you want to delete '(.+)'\\?$",
