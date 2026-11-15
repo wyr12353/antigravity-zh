@@ -211,6 +211,11 @@ def check_js_syntax():
             fail(f"{rel(path)} 语法检查超时（node --check 60 秒未返回）")
             bad += 1
             continue
+        except OSError as e:
+            # node 存在但启动失败（被策略禁用等）：与 run_node 同口径报失败
+            fail(f"{rel(path)} 无法执行 node --check：{e}")
+            bad += 1
+            continue
         if proc.returncode != 0:
             fail(f"{rel(path)} 语法错误：{proc.stderr.decode('utf-8', 'replace').strip()[:200]}")
             bad += 1
@@ -256,16 +261,24 @@ def check_dicts():
                 re.compile(r[0], re.I if "i" in r[1] else 0)
             except re.error as e:
                 fail(f"{path.name} template[{i}] 正则非法：{e}")
-        # 空译值：运行时按真值判断（if (EXACT[trimmed])），空串词条等于不存在
-        for section in ("exact", "words"):
+            if set(r[1] or "") - set("i"):
+                # Python 侧（selfcheck 与 patcher 的 missing）都只按 i 编译；
+                # 其他标志（m/s/g/u/y）在 JS 里会改变匹配语义，两侧可能分叉
+                print(f"  [提示] {path.name} template[{i}] 使用了 i 以外的标志 {r[1]!r}——"
+                      "Python 侧只按 i 编译，两侧匹配语义可能分叉")
+        # 译值类型与空值（menus 一并查：非字符串/空串译值在运行时同样失效）。
+        # 非字符串译值注入后还会产出 "[object Object]"——与 patcher.load_dicts 双保险
+        for section in ("exact", "words", "menus"):
             for key, val in data.get(section, {}).items():
-                if not val:
+                if not isinstance(val, str):
+                    fail(f"{path.name} {section} 键 {key!r} 译值不是字符串（{type(val).__name__}）")
+                elif not val:
                     fail(f"{path.name} {section} 键 {key!r} 译值为空——运行时按真值判断，空串词条不生效")
         # $ 特殊序列：EXACT/WORDS 译文经 String.replace 注入，$&/$`/$' 会被
         # 替换语义解释（template 里的 $n 是有意用法，不在此列）
         for section in ("exact", "words"):
             for key, val in data.get(section, {}).items():
-                if val and re.search(r"[$][&`']", val):
+                if isinstance(val, str) and re.search(r"[$][&`']", val):
                     print(f"  [提示] {path.name} {section} 键 {key!r} 译值含 $&/$`/$'——"
                           "运行时会被 String.replace 解释，确认这是有意的吗？")
         for section in ("exact", "words", "menus"):
@@ -447,7 +460,7 @@ def check_privacy():
     for path in sorted(PROJECT_DIR.rglob("*")):
         if not path.is_file() or path.suffix not in SCAN_SUFFIXES:
             continue
-        if "out" in path.parts or "__pycache__" in path.parts:
+        if any(part in path.parts for part in ("out", "__pycache__", ".git")):
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
         for m in EMAIL_RE.finditer(text):

@@ -26,6 +26,11 @@ jobs:
             os: ubuntu-24.04
           - python-version: "3.11"
             os: ubuntu-latest
+          # 工具本身是 Windows 专用的：cp1252 管道编码这类平台问题
+          # （selfcheck 的输出层就为此修过）不应等到打 tag 打包时才暴露，
+          # 日常提交就跑一遍 Windows。3.11 与 build-exe.yml 的打包环境一致。
+          - python-version: "3.11"
+            os: windows-latest
     steps:
       # 各 action 统一到当前最新主版本（后续由 Dependabot 跟进）。
       # 早先的 v4 / v5 那一代跑在 Node 20 上，runner 会报

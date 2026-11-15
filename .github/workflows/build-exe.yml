@@ -24,6 +24,13 @@ jobs:
           # pyproject.toml 之类的依赖文件，而本项目是纯标准库、一个都没有，
           # 加上它会让 setup-python 直接报错并中断整个 workflow（Release 就产不出来了）。
 
+      # selfcheck 有四组校验依赖 node（JS 语法、模板正则、噪声等价、运行时规则）。
+      # runner 预装镜像未来可能不再自带 node，显式安装与 check.yml 一致，
+      # 避免 node 缺位时这四组静默消失、发布回归给出假绿灯。
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
       - name: 提交前自检
         run: python tools/selfcheck.py
 

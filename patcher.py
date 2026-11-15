@@ -123,7 +123,10 @@ def ensure_resources():
         raise SystemExit(f"[错误] 找不到内嵌资源 {', '.join(missing)}/（exe 同级与解压目录都没有）。\n"
                          "        可能被杀毒软件隔离，请重新解压或将本程序加入白名单。")
 
-DEFAULT_INSTALL = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "antigravity"
+_localappdata = os.environ.get("LOCALAPPDATA", "").strip()
+# LOCALAPPDATA 缺失时置 None：Path("") 会拼出相对路径，
+# find_install 的报错会指向错误的位置
+DEFAULT_INSTALL = Path(_localappdata) / "Programs" / "antigravity" if _localappdata else None
 
 ASAR_REL = Path("resources") / "app.asar"
 BACKUP_REL = Path("resources") / "app.asar.zh-orig"
@@ -233,6 +236,9 @@ TARGETED_REPLACES = {
 
 
 def find_install(user_dir):
+    if not user_dir and DEFAULT_INSTALL is None:
+        raise SystemExit("[错误] 环境变量 LOCALAPPDATA 不可用，无法定位默认安装目录，"
+                         "请用 --dir 指定 Antigravity 安装目录")
     install = Path(user_dir or DEFAULT_INSTALL).resolve()
     exe = install / "Antigravity.exe"
     resources = install / "resources"
@@ -263,13 +269,17 @@ def read_version(source):
         raise SystemExit(f"[错误] 读取 asar 版本失败（文件损坏或不是 asar）: {e}")
 
 
-# Antigravity 的伴生进程：taskkill 掉主进程后 language_server / webm_encoder
+# Antigravity 相关进程：主进程被结束掉之后 language_server / webm_encoder
 # 仍会在释放文件句柄，紧接着的目录删除或改名可能因此失败。
 #
-# 这两个名字并非 Antigravity 独有，按映像名全系统 taskkill 会误杀第三方同名
-# 进程，所以伴生进程只在确认其可执行路径位于本安装目录之后才结束。
-# （PS 脚本里的进程名列表由本常量生成，两处调用不会各自漂移。）
-COMPANION_PROCESSES = ("language_server", "webm_encoder")
+# 主进程与伴生进程一律只在确认其可执行路径位于本安装目录之后才结束：
+# Antigravity.exe 的名字在 antigravity / antigravity-nightly 这类兄弟安装之间
+# 并不唯一，language_server 等伴生名更非独有，按映像名全系统 taskkill
+# 会误杀另一套安装（或第三方同名进程）。
+# （Get-Process 的名字不带 .exe；PS 脚本里的进程名列表由本常量生成，
+# 探测与结束两处调用不会各自漂移。）
+PROCESS_NAMES = ("Antigravity", "language_server", "webm_encoder")
+MAIN_EXE = "Antigravity.exe"
 
 
 def _ps_quote(s):
@@ -277,13 +287,13 @@ def _ps_quote(s):
     return "'" + str(s).replace("'", "''") + "'"
 
 
-def _companion_ps_script(install, action):
-    """生成伴生进程的 PS 过滤脚本：按可执行路径前缀（封口到目录分隔符）过滤。
+def _ps_script(install, action):
+    """生成按路径过滤的 PS 脚本：主进程与伴生进程一视同仁。
 
     前缀必须以 \\ 结尾再比较，否则 antigravity-nightly 这类同前缀兄弟目录
     的同名进程会被误杀/误报。
     """
-    names = ", ".join(COMPANION_PROCESSES)
+    names = ", ".join(PROCESS_NAMES)
     prefix = _ps_quote(str(install).rstrip("\\") + "\\")
     return ("Get-Process " + names + " -ErrorAction SilentlyContinue | "
             "Where-Object { $_.Path -and $_.Path.StartsWith(" + prefix + ") } | " + action)
@@ -292,28 +302,30 @@ def _companion_ps_script(install, action):
 def running_processes():
     """返回仍在运行的 Antigravity 主进程名（空列表表示已退出）。
 
-    只认 Antigravity.exe：它决定"应用是否还在运行"，名字足够特异；
-    伴生进程是否残留由 companion_left() 单独按路径判定。
+    只认 Antigravity.exe，供 launch_app 确认启动结果；兄弟安装恰好在
+    运行时会误报"已启动"，但那只影响提示文案。补丁前的探测与结束
+    走 leftover_processes()，按安装路径过滤。
     """
     # tasklist 在中文 Windows 上输出 GBK，这里只按字节匹配进程名，避免解码问题
     try:
         result = subprocess.run(["tasklist"], capture_output=True, check=False, timeout=30)
     except (OSError, subprocess.TimeoutExpired):
         return []
-    return ["Antigravity.exe"] if b"Antigravity.exe" in (result.stdout or b"") else []
+    return [MAIN_EXE] if MAIN_EXE.encode() in (result.stdout or b"") else []
 
 
-def companion_left(install):
-    """返回仍在本安装目录下运行的伴生进程名（按可执行路径过滤）。"""
-    script = (_companion_ps_script(install, "ForEach-Object { $_.ProcessName + '.exe' }"))
+def leftover_processes(install):
+    """返回仍在本安装目录下运行的相关进程名（含 .exe，按可执行路径过滤）。"""
+    script = _ps_script(install, "ForEach-Object { $_.ProcessName + '.exe' }")
     try:
         result = subprocess.run(["powershell", "-NoProfile", "-Command", script],
                                 capture_output=True, check=False, timeout=30)
         out = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
     except (OSError, subprocess.TimeoutExpired):
-        return []          # PowerShell 不可用时按"无伴生进程"处理，后续 _retry 兜底
-    return sorted({line.strip() + ("" if line.strip().lower().endswith(".exe") else ".exe")
-                   for line in out.splitlines() if line.strip()})
+        # PowerShell 不可用时按"没有进程"处理：后续 _retry 会兜住文件占用，
+        # 报错信息会提示"请彻底退出后重试"，不会静默出错。
+        return []
+    return sorted({line.strip() + ".exe" for line in out.splitlines() if line.strip()})
 
 
 def _retry(func, attempts=5, delay=0.6):
@@ -331,16 +343,16 @@ def _retry(func, attempts=5, delay=0.6):
 
 
 def ensure_closed(auto_yes, install):
-    """结束 Antigravity 及其伴生进程。
+    """结束本安装目录下的 Antigravity 及其伴生进程。
 
-    install 用于伴生进程的路径过滤（支持 --dir 自定义安装目录）。
+    install 用于进程的路径过滤（支持 --dir 自定义安装目录，
+    也避免误杀 antigravity-nightly 等兄弟安装）。
     """
     target = Path(install)
-    running = running_processes()
-    companions = companion_left(target)
-    if not running and not companions:
+    running = leftover_processes(target)
+    if not running:
         return
-    if running:
+    if MAIN_EXE.lower() in {n.lower() for n in running}:
         print("[提示] Antigravity 正在运行，补丁需要先关闭它。")
     else:
         print("[提示] Antigravity 主进程已退出，但仍有伴生进程占用文件。")
@@ -351,19 +363,20 @@ def ensure_closed(auto_yes, install):
             raise SystemExit("[中止] 非交互环境无法询问，请加 --yes 或手动关闭 Antigravity。")
         if answer and not answer.startswith("y"):   # 只有明确同意才继续
             raise SystemExit("[中止] 请关闭 Antigravity 后重试。")
-    # 主进程按映像名结束（名字唯一）；伴生进程按可执行路径结束，
-    # 它们没有可点的退出入口，只杀主进程会让用户卡在"仍有进程未退出"。
-    subprocess.run(["taskkill", "/F", "/IM", "Antigravity.exe"],
-                   capture_output=True, check=False)
-    ps = _companion_ps_script(target, "Stop-Process -Force")
-    subprocess.run(["powershell", "-NoProfile", "-Command", ps],
+    # 全部按可执行路径结束：它们没有可点的退出入口，只结束主进程会让用户
+    # 卡在"仍有进程未退出"。
+    # 注：以管理员权限运行的进程在未提权的 PowerShell 里读不到 $_.Path，
+    # 不会被结束——后续 os.replace 会以"文件被占用"失败并提示彻底退出。
+    # 宁可让用户手动关一次，也不冒误杀兄弟安装的风险。
+    subprocess.run(["powershell", "-NoProfile", "-Command",
+                    _ps_script(target, "Stop-Process -Force")],
                    capture_output=True, check=False)
     # 等最多 10 秒让句柄释放。超时不中止：真正锁住 resources/app 的是主进程，
     # 残留的伴生进程交给后续的 _retry 与错误提示兜底。
     leftover = []
     for _ in range(20):
         time.sleep(0.5)
-        leftover = running_processes() + companion_left(target)
+        leftover = leftover_processes(target)
         if not leftover:
             break
     if leftover:
@@ -401,7 +414,15 @@ def load_dicts():
             if not (isinstance(r, list) and len(r) == 3 and all(isinstance(x, str) for x in r)):
                 raise SystemExit(f"[错误] {path.name} 的 template[{i}] 结构应为 [正则, 标志, 译文]：{r!r}")
         for section in ("exact", "words", "menus"):
-            for key in data.get(section, {}):
+            sec = data.get(section, {})
+            if not isinstance(sec, dict):
+                raise SystemExit(f"[错误] {path.name} 的 {section} 应为对象（英文 → 中文 的键值对）")
+            for key, val in sec.items():
+                # 非字符串译值注入后运行时会产出 "[object Object]" 或静默失效，
+                # 与 rules/template 一样在加载期点名，而不是留到界面上才发现
+                if not isinstance(val, str):
+                    raise SystemExit(f"[错误] {path.name} 的 {section}[{key!r}] 译值应为字符串"
+                                     f"（当前是 {type(val).__name__}）")
                 first = origin.setdefault((section, key), path.name)
                 if first != path.name:
                     dupes.append(f"{key}（{first} → {path.name}）")
@@ -459,7 +480,14 @@ def inject_block(app_dir, rel_path, block, marker, label):
     if not file_path.exists():
         print(f"[跳过] 未找到 {rel_path}，无法注入{label}")
         return False
-    content = file_path.read_text(encoding="utf-8")
+    try:
+        content = file_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        # UnicodeDecodeError 不在 OSError 内：客户端文件并非合法 UTF-8 时
+        # 不能裸崩到通用分支，给出与其他失败一致的可执行恢复路径。
+        raise SystemExit(
+            f"[错误] 读取 {rel_path} 失败：{e}\n"
+            "        文件可能已损坏，请运行 python patcher.py restore 还原官方原版后重试。")
     if marker in content:
         # do_patch 注入前总是 rmtree + 全新解包，解出的文件不可能已含 marker。
         # 真出现了说明目录不是全新状态，截断重写只会掩盖问题。
@@ -487,7 +515,13 @@ def apply_targeted_replaces(app_dir):
             # 同样不能静默——README 承诺过版本漂移不静默失效
             print(f"[提示] {rel} 不存在，跳过 {len(pairs)} 处字面量替换（客户端结构可能已变）")
             continue
-        content = original = target.read_text(encoding="utf-8")
+        try:
+            content = original = target.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as e:
+            # 与 inject_block 的读失败同等对待：给出可执行的恢复路径
+            raise SystemExit(
+                f"[错误] 读取 {rel} 失败：{e}\n"
+                "        文件可能已损坏，请运行 python patcher.py restore 还原官方原版后重试。")
         missed = []
         for old, new in pairs:
             if old in content:
@@ -767,6 +801,58 @@ def do_status(install):
         print("一致性     : 补丁与当前版本匹配，一切正常")
 
 
+def _classify_candidates(candidates, dicts):
+    """把 bundle 提取的候选分成 (ui, suspect, other) 三组。
+
+    已被词典覆盖的候选（精确整句 / 模板规则 / 前缀规则 / 弱匹配短词）
+    不进任何组。
+    """
+    known = set(dicts["exact"])
+    words_lower = {k.lower() for k in dicts["words"]}
+    templates = []
+    for p, f, _t in dicts["template"]:
+        try:
+            templates.append(re.compile(p, re.I if "i" in (f or "") else 0))
+        except re.error as e:
+            # 词典里的模板正则是给 JS new RegExp 用的，可能含 Python 不认的语法
+            print(f"[提示] 模板规则 Python 无法编译，已跳过：{p}（{e}）")
+    prefixes = [r[0] for r in dicts["rules"]]
+    tpl_prefixes = [p for p in (literal_prefix(r[0]) for r in dicts["template"]) if len(p) >= 8]
+
+    ui, suspect, other = [], [], []
+    for s in sorted(candidates):
+        # 技术/噪声形态每候选只判一次：短串据此直接丢弃，长串据此归入 other
+        technical = _looks_technical(s) or (_is_noise is not None and _is_noise(s))
+        # 短串（1~2 个词）的技术/噪声形态直接丢弃。
+        # 早先用"必须以界面动词开头"的白名单过滤，结果把 "Action required"、
+        # "Agent Edits"、"About embedding" 这类真实按钮文案一并丢掉，
+        # 而它们恰恰是新版本最可能新增的形态——所以短串只丢技术形态，
+        # 绝不做动词白名单。
+        if s.count(" ") < 2 and technical:
+            continue
+        # 已被词典覆盖：精确整句 / 模板规则整句 / 前缀规则的片段
+        if s in known or any(r.match(s) for r in templates) or any(p in s for p in prefixes):
+            continue
+        # 弱匹配词表覆盖的短文案不算缺失："FAILED" 这类 exact 没收录的
+        # 大小写变体，运行时由 WORDS 的 lower 查找兜底（≤3 词才命中）。
+        # menus 不在此列：它只作用于主进程原生菜单，对 web 界面无效。
+        if len(s.split()) <= 3 and s.lower() in words_lower:
+            continue
+        # 已被模板规则覆盖的拼接片段（bundle 里的片段可能比模板前缀少一个尾随空格）
+        if len(s) >= 8 and any(s.startswith(p) or p.startswith(s) for p in tpl_prefixes):
+            continue
+        if any(noise in s for noise in DEV_NOISE):
+            suspect.append(s)
+        elif technical:
+            other.append(s)         # 包名/路径/代码常量等技术形态
+        else:
+            # 默认按界面文案对待。早先只有"以界面动词开头"的候选才进 ui 组，
+            # 而这类常见动词早已被词典覆盖并在上面被过滤掉，剩下的新文案
+            # 天生不会落在白名单里 —— ui 组因此长期恒为 0，让人误以为已全覆盖。
+            ui.append(s)
+    return ui, suspect, other
+
+
 def do_missing(install, top, keep):
     """从当前运行的界面 bundle 提取 UI 文案，列出词典尚未覆盖的条目。"""
     source, _ = asar_source(install)
@@ -788,7 +874,6 @@ def do_missing(install, top, keep):
     if not ports:
         raise SystemExit("[错误] 日志里没有本地服务端口记录，请先启动 Antigravity")
 
-    bundle_path = OUT_DIR / "main-bundle.js"
     # 本地服务用自签名证书，跳过校验；用 urllib 而不是调用系统 curl，
     # 免去对 curl.exe 的依赖（与"纯标准库"的定位一致）。
     #
@@ -821,10 +906,14 @@ def do_missing(install, top, keep):
     if data is None:
         raise SystemExit(f"[错误] 无法从日志记录的端口取到界面 bundle（已尝试 {', '.join(tried)}）\n"
                          "        请确认 Antigravity 正在运行")
-    bundle_path.write_bytes(data)
     print(f"[完成] 已从本地服务（端口 {used_port}）下载界面 bundle：{len(data) // 1024} KB")
+    # 只在 --keep 时落盘复查：默认"写盘再整读回"是纯粹的 12MB 往返 IO
+    if keep:
+        bundle_path = OUT_DIR / "main-bundle.js"
+        bundle_path.write_bytes(data)
+        print(f"        已保存 -> {bundle_path}")
 
-    text = bundle_path.read_text(encoding="utf-8", errors="replace")
+    text = data.decode("utf-8", errors="replace")
     candidates = set()
     for m in UI_TEXT_RE.finditer(text):
         s = m.group(1)
@@ -836,55 +925,21 @@ def do_missing(install, top, keep):
             continue
         if any(bad in s for bad in UI_BAD):
             continue
-        # 短串（1~2 个词）改走噪声判定。
-        # 早先用"必须以界面动词开头"的白名单过滤，结果把 "Action required"、
-        # "Agent Edits"、"About embedding" 这类真实按钮文案一并丢掉，
-        # 而它们恰恰是新版本最可能新增的形态。
-        if s.count(" ") < 2 and (_looks_technical(s) or (_is_noise is not None and _is_noise(s))):
-            continue
         candidates.add(s)
 
     dicts = load_dicts()
-    known = set(dicts["exact"])
-    templates = []
-    for p, f, _t in dicts["template"]:
-        try:
-            templates.append(re.compile(p, re.I if "i" in (f or "") else 0))
-        except re.error as e:
-            # 词典里的模板正则是给 JS new RegExp 用的，可能含 Python 不认的语法
-            print(f"[提示] 模板规则 Python 无法编译，已跳过：{p}（{e}）")
-    prefixes = [r[0] for r in dicts["rules"]]
-    tpl_prefixes = [p for p in (literal_prefix(r[0]) for r in dicts["template"]) if len(p) >= 8]
-
-    ui, suspect, other = [], [], []
-    for s in sorted(candidates):
-        if s in known or any(r.match(s) for r in templates) or any(p in s for p in prefixes):
-            continue
-        # 已被模板规则覆盖的拼接片段（bundle 里的片段可能比模板前缀少一个尾随空格）
-        if len(s) >= 8 and any(s.startswith(p) or p.startswith(s) for p in tpl_prefixes):
-            continue
-        if any(noise in s for noise in DEV_NOISE):
-            suspect.append(s)
-        elif _looks_technical(s) or (_is_noise is not None and _is_noise(s)):
-            other.append(s)         # 包名/路径/代码常量等技术形态
-        else:
-            # 默认按界面文案对待。早先只有"以界面动词开头"的候选才进 ui 组，
-            # 而这类常见动词早已被词典覆盖并在上面被过滤掉，剩下的新文案
-            # 天生不会落在白名单里 —— ui 组因此长期恒为 0，让人误以为已全覆盖。
-            ui.append(s)
+    ui, suspect, other = _classify_candidates(candidates, dicts)
 
     out = OUT_DIR / "missing.json"
     out.write_text(json.dumps({"version": version, "ui": ui, "suspect": suspect, "other": other},
                               ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"[完成] 疑似界面文案 {len(ui)} 条 | 疑似开发者信息 {len(suspect)} 条 | 技术形态 {len(other)} 条")
     print(f"        全部写入 {out}（ui 是主清单，另两组供交叉核对）")
+    top = max(top, 0)   # 负数会让切片从尾部数，输出错乱
     for s in ui[:top]:
         print("  " + s[:110])
     if len(ui) > top:
         print(f"  …（其余 {len(ui) - top} 条见 missing.json 的 ui 组）")
-    if not keep:
-        bundle_path.unlink(missing_ok=True)
-        print("[提示] 已删除下载的 bundle（加 --keep 可保留复查）")
     print("[提示] 挑出要翻译的条目补进 dict/*.json 后，重跑 python patcher.py patch")
 
 

@@ -52,7 +52,12 @@ def main():
 
     if not OUT_FILE.exists():
         raise SystemExit(f"[错误] 找不到 {OUT_FILE}，请先运行 scan 并操作一遍界面")
-    data = json.loads(OUT_FILE.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(OUT_FILE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError) as e:
+        # 收集器与外部读者并发时可能读到半截 JSON：明确提示而不是裸抛栈
+        raise SystemExit(f"[错误] {OUT_FILE.name} 解析失败：{e}\n"
+                         "        收集器可能正在写入，请稍后重试；仍不行就重跑 scan 重新收集。")
     strings = data.get("strings", [])
     if not strings:
         raise SystemExit("[信息] 收集结果为空，没有需要翻译的新文案")
@@ -92,7 +97,12 @@ def main():
             print(f"        位置: {path[:120]}")
         if list_only:
             continue
-        answer = input("        中文 (回车跳过 / q 退出): ").strip()
+        try:
+            answer = input("        中文 (回车跳过 / q 退出): ").strip()
+        except EOFError:
+            # 管道/CI 下 stdin 关闭：按"退出"处理，已录入的词条照常保存
+            print()
+            break
         if answer == "q":
             break
         if answer:

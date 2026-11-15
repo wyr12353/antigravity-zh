@@ -46,7 +46,9 @@ def grab(name, src):
     """
     norm = src.replace("\r\n", "\n")
     head = "var " + name + " = "
-    start = norm.find(head)
+    # 注入块追加在文件末尾，从尾部找最后一次出现：万一 bundle 原文里
+    # 也出现过同名样字，find 会定位到注入块之外。
+    start = norm.rfind(head)
     if start < 0:
         raise SystemExit(f"[错误] 注入产物里找不到 {name}，安装目录可能未打补丁")
     payload = norm[start + len(head):].lstrip()
@@ -255,7 +257,9 @@ def make_translate(dicts):
                 def group(mm):
                     idx = int(mm.group(1))
                     if idx <= m.re.groups:
-                        return m.group(idx)
+                        # 未参与匹配的组 JS 替换为空串，Python 的 None 会让
+                        # re.sub 回调直接抛 TypeError
+                        return m.group(idx) or ""
                     return "$" + mm.group(1)   # JS 对越界 $n 保留字面
                 replaced = re.sub(r"\$(\d+)", group, tpl)
                 if replaced != trimmed:

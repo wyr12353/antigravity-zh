@@ -5,6 +5,9 @@
   1. 解析 asar 头，列出归档内文件
   2. 按名字读取单个文件内容
   3. 整包解包到目录（带条目路径遏制校验，防 asar-slip）
+
+注：unpacked:true 条目（native 模块等）的内容不在归档内，
+extract_to 会跳过它们，由调用方从 app.asar.unpacked 目录并入。
 """
 import json
 import struct
