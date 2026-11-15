@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""提交前自检，分七组：语法（Python / 可导入 / JS）、词典结构与跨文件重复键、
+"""提交前自检，分八组：语法（Python / 可导入 / JS）、词典结构与跨文件重复键、
 注入模板占位符双向一致、Python 与 JS 两侧的噪声判定等价、运行时子串规则行为、
-验证用例结构、隐私泄漏。
+消息内容区跳过容器、验证用例结构、隐私泄漏。
 
 用法:
     python tools/selfcheck.py
@@ -451,6 +451,30 @@ def check_noise_parity():
         ok(f"噪声判定两侧等价（{len(NOISE_SAMPLES)} 条语料）")
 
 
+def check_content_skip_zones():
+    """消息内容区容器必须在 SKIP_SEL 里。
+
+    2.32.1 起客户端不再用 role=article，消息流改用
+    data-testid="agent-response"/"user-message"。这类容器一旦从跳过区消失，
+    模型输出里的独立英文词就会被短词弱匹配乱翻（the→"该"、Retry→"重试"）。
+    """
+    src = (INJECT_DIR / "zh_runtime.js").read_text(encoding="utf-8")
+    line = next((ln for ln in src.splitlines() if "var SKIP_SEL" in ln), "")
+    if not line:
+        fail("未能从 zh_runtime.js 找到 SKIP_SEL 定义（代码结构可能已变）")
+        return
+    required = [
+        r"[role=article]",                      # 旧版消息流
+        r'[data-testid=\"agent-response\"]',    # 新版：模型输出
+        r'[data-testid=\"user-message\"]',      # 新版：用户消息
+    ]
+    missing = [s for s in required if s not in line]
+    if missing:
+        fail(f"SKIP_SEL 缺少消息内容区容器：{missing}——模型输出会被短词弱匹配乱翻")
+    else:
+        ok(f"消息内容区容器在跳过区内（{len(required)} 个标记，兼容新旧两版）")
+
+
 def check_privacy():
     me = os.environ.get("USERNAME") or os.environ.get("USER") or ""
     # CI runner / 通用账号名没有检查意义，反而容易误报
@@ -496,6 +520,8 @@ def main():
     check_noise_parity()
     print("== 运行时规则 ==")
     check_runtime_rules()
+    print("== 内容跳过区 ==")
+    check_content_skip_zones()
     print("== 验证用例 ==")
     check_cases()
     print("== 隐私 ==")

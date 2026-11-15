@@ -325,7 +325,10 @@ def leftover_processes(install):
         # PowerShell 不可用时按"没有进程"处理：后续 _retry 会兜住文件占用，
         # 报错信息会提示"请彻底退出后重试"，不会静默出错。
         return []
-    return sorted({line.strip() + ".exe" for line in out.splitlines() if line.strip()})
+    # ProcessName 是否带 .exe 因 PowerShell 版本而异（实测本机即带），
+    # 两种输出都归一成"名字.exe"
+    return sorted({line.strip() + ("" if line.strip().lower().endswith(".exe") else ".exe")
+                   for line in out.splitlines() if line.strip()})
 
 
 def _retry(func, attempts=5, delay=0.6):

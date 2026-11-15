@@ -37,15 +37,19 @@
   // 表现就是"展开的是中文、不展开的那个还是英文"。
   // 可编辑输入仍由 input / textarea / [role=textbox] / [contenteditable] 兜住。
   //
-  // [role=article] 是对话消息流（User message / Agent response / 思维链）。
-  // 模型输出与思维链是"内容"而非界面：流式渲染会把一句话拆成大量碎片节点，
-  // 词典里的短词条与弱匹配词表会命中碎片，产出中英混杂的乱翻文本。
+  // 消息流容器（模型输出 / 用户消息）整体跳过：模型输出与思维链是"内容"
+  // 而非界面，流式渲染会把一句话拆成大量碎片节点，词典里的短词条与弱匹配
+  // 词表会命中碎片，产出中英混杂的乱翻文本（实测：the→"该"、Retry→"重试"
+  // 出现在模型输出里）。
+  // 旧版客户端用 [role=article] 标记消息流；2.32.1 的 bundle 已完全没有
+  // role=article，改为 data-testid="agent-response" / "user-message"——
+  // 两种容器都保留，兼容新旧版本。
   // 因此内容区整体跳过；耗时时间戳等界面性信息由 processNode 的白名单特例处理。
   // 语音字幕的五个容器也整体跳过：nTc 会把整行按 /\S+|\s+/g 拆成逐词 span
   // （朗读进度高亮），每个词都是独立文本节点，不跳过会被词典里的单字词条
   // （the/an/and/All/Ready…）和弱匹配逐词命中，把用户说的话翻成中英混杂。
   // 这些是用户/智能体说出来的内容，与消息正文同理，不属于界面文案。
-  var SKIP_SEL = "pre, code, textarea, input, script, style, .monaco-editor, [contenteditable], [role=textbox], [role=searchbox], [role=article], [data-testid=\"voice-user-message\"], [data-testid=\"voice-agent-message\"], [data-testid=\"voice-chat-marker\"], [data-testid=\"live-user-turn\"], [data-testid=\"live-agent-turn\"]";
+  var SKIP_SEL = "pre, code, textarea, input, script, style, .monaco-editor, [contenteditable], [role=textbox], [role=searchbox], [role=article], [data-testid=\"agent-response\"], [data-testid=\"user-message\"], [data-testid=\"voice-user-message\"], [data-testid=\"voice-agent-message\"], [data-testid=\"voice-chat-marker\"], [data-testid=\"live-user-turn\"], [data-testid=\"live-agent-turn\"]";
 
   // ---------- 收集器（scan 模式）----------
   var collector = null;
@@ -167,8 +171,9 @@
       });
   }
   // "Worked for 1.2s" / "Thought for 45 sec" → 运行/思考耗时。
-  // 这是界面性信息，但渲染在对话消息流（role=article，已整体跳过）的折叠条上，
-  // 所以除了常规 SUBSTR 路径，processNode 的跳过区分支也会调用本函数。
+  // 耗时时间戳是界面性信息，但渲染在消息内容区（旧版 role=article，新版
+  // agent-response，均已整体跳过）的折叠条上，所以除了常规 SUBSTR 路径，
+  // processNode 的跳过区分支也会调用本函数。
   // 捕获段必须以数字开头：正文里 "Worked for me, thanks" 这类文本不是时间戳，
   // 不能因为前缀相同就被改写（i 标志下字符类含全部字母，靠 \\d 卡住）。
   function elapsedTranslate(t) {
@@ -180,13 +185,13 @@
       .replace(/Worked for (\d[\d.a-z, ]*)/gi, function (_, ts) { return "运行耗时 " + elapsedZh(ts); })
       .replace(/Thought for (\d[\d.a-z, ]*)/gi, function (_, ts) { return "思考耗时 " + elapsedZh(ts); });
   }
-  // 耗时条"整节点"的形态。processNode 在 article 跳过区放行耗时条时必须用这个
+  // 耗时条"整节点"的形态。processNode 在消息内容区放行耗时条时必须用这个
   // 判据，而不是"以 Worked/Thought for 数字开头"：elapsedTranslate 内部是子串
   // 替换，只判开头会把正文里 "Worked for 3 hours, still failing" 这种句子截成
   // 半中半英（"运行耗时 3小时, still failing"）。这里要求整节点只由「数字 + 单位」
   // 的若干段组成，正文句子必然带别的内容而无法匹配。
   // 单位表必须与上面 elapsedZh 的正则一致：漏掉 days?/d/weeks? 会让
-  // "Worked for 2 days" 在 article 区永远放行不了，而同样文本在非 article 区
+  // "Worked for 2 days" 在内容区永远放行不了，而同样文本在非内容区
   // 却会被 SUBSTR 翻掉，同一个耗时条出现两种结果。
   var ELAPSED_NODE_RE = /^\s*(?:Worked|Thought) for\s+(?:\d+(?:\.\d+)?\s*(?:ms|milliseconds?|weeks?|secs?|seconds?|s|mins?|minutes?|m|hrs?|hours?|days?|d|h)\b[\s,]*)+$/i;
 
@@ -383,14 +388,18 @@
     return false;
   }
 
-  // 最近命中的跳过区是否为对话消息流（role=article）。
-  // 耗时时间戳的白名单只对它开放：pre/code/textarea/contenteditable 的
-  // 最近命中是自身（非 article），不会因这个白名单重新暴露给翻译。
+  // 最近命中的跳过区是否为消息内容区（旧版 role=article，新版
+  // data-testid="agent-response" / "user-message"）。
+  // 耗时时间戳与系统通知的白名单只对消息内容区开放：pre/code/textarea/
+  // contenteditable 的最近命中是自身（非内容区），不会因白名单重新暴露。
   function inArticleZone(el) {
     if (!el) return false;
     try {
       var zone = el.closest ? el.closest(SKIP_SEL) : null;
-      return !!(zone && zone.getAttribute && zone.getAttribute("role") === "article");
+      if (!zone || !zone.getAttribute) return false;
+      if (zone.getAttribute("role") === "article") return true;
+      var tid = zone.getAttribute("data-testid");
+      return tid === "agent-response" || tid === "user-message";
     } catch (e) {}
     return false;
   }
@@ -430,10 +439,11 @@
     applyAttrs(el);
 
     // 属性处理完毕；跳过区内的元素不再递归处理文本与子节点。
-    // 例外：消息流（article）内的控件——复制/重试按钮等——同样是控件，
-    // 它们的 title/aria-label 也要翻。递归子元素时子元素 skip 仍为真，
-    // 只会走到属性段后再次进入本分支，天然只翻属性、绝不碰文本；
-    // monaco/contenteditable 的最近命中是自身而非 article，不递归。
+    // 例外：消息内容区（article / agent-response / user-message）内的控件
+    // ——复制/重试按钮等——同样是控件，它们的 title/aria-label 也要翻。
+    // 递归子元素时子元素 skip 仍为真，只会走到属性段后再次进入本分支，
+    // 天然只翻属性、绝不碰文本；monaco/contenteditable 的最近命中是自身
+    // 而非内容区，不递归。
     if (inSkipZone(el)) {
       if (inArticleZone(el)) {
         // 传 childNodes 而不是 children：耗时条是叶子 span 里的文本节点，
@@ -474,7 +484,7 @@
       var parent = node.parentElement || node.parentNode;
       if (!inside && parent && inSkipZone(parent)) {
         // 内容区（消息/思维链正文）唯一的例外：耗时时间戳是界面性信息。
-        // 白名单只对 article 区开放（inArticleZone）：pre/code 里的
+        // 白名单只对消息内容区开放（inArticleZone）：pre/code 里的
         // "Worked for ..." 文本、用户消息与输入框里的同形文本都不会被改写；
         // 且必须整节点就是一个耗时条（ELAPSED_NODE_RE），只判开头会让
         // "Worked for 3 hours, still failing" 这类正文被截成半中半英。
