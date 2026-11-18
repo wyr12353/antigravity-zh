@@ -452,11 +452,13 @@ def check_noise_parity():
 
 
 def check_content_skip_zones():
-    """消息内容区容器必须在 SKIP_SEL 里。
+    """消息内容区与语音字幕容器必须在 SKIP_SEL 里。
 
     2.32.1 起客户端不再用 role=article，消息流改用
-    data-testid="agent-response"/"user-message"。这类容器一旦从跳过区消失，
-    模型输出里的独立英文词就会被短词弱匹配乱翻（the→"该"、Retry→"重试"）。
+    data-testid="agent-response"/"user-message"；2.33.0 起语音字幕容器
+    由 voice-user-message 改为 live-transcript / transcript-line-text。
+    这类容器一旦从跳过区消失，模型输出与字幕里的独立英文词就会被
+    短词弱匹配乱翻（the→"该"、Retry→"重试"）。
     """
     src = (INJECT_DIR / "zh_runtime.js").read_text(encoding="utf-8")
     line = next((ln for ln in src.splitlines() if "var SKIP_SEL" in ln), "")
@@ -467,6 +469,7 @@ def check_content_skip_zones():
         r"[role=article]",                      # 旧版消息流
         r'[data-testid=\"agent-response\"]',    # 新版：模型输出
         r'[data-testid=\"user-message\"]',      # 新版：用户消息
+        r'[data-testid=\"transcript-line-text\"]',  # 2.33.0 起：语音字幕逐行文本
     ]
     missing = [s for s in required if s not in line]
     if missing:

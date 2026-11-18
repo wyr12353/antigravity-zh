@@ -334,6 +334,11 @@
     ["Use Tari", "使用 Tari"],
     ["Use", "使用"],
     ["Fola, voice 1 of 9", "Fola（第 1 / 9 个声音）"],
-    ["Auto", "自动"]
+    ["Auto", "自动"],
+    ["Clear Browsing Data?", "清除浏览数据？"],
+    ["Microphone silent", "麦克风无声"],
+    ["Keybinding Scheme", "键位方案"],
+    ["VS Code Default", "VS Code 默认"],
+    ["Web (desktop, remote agents, PWA)", "Web（桌面版、远程智能体、PWA）"]
   ]
 }
