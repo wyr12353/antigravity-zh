@@ -1,0 +1,10 @@
+{
+  "_source": "antigravity-zh 自维护：v2.32.2 补译（输入框挂载失败、隐私规则提示、问卷抽样状态）",
+  "_note": "键为英文原文、值为中文。条目来自 v2.32.2 与 v2.32.1 界面 bundle 清单的差集；快捷键残片（Alt+ArrowUp Alt+ArrowDown）、枚举标记（FENCEDFRAME）与断句片段（The agent）不收录。",
+  "exact": {
+    "Input box editor is not mounted": "输入框编辑器未挂载",
+    "Not a JSON string literal": "不是 JSON 字符串字面量",
+    "Rejected (survey not sampled)": "已拒绝（调查未抽样）",
+    "The window title matches a privacy rule.": "窗口标题匹配隐私规则。"
+  }
+}
