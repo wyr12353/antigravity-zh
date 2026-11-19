@@ -347,6 +347,8 @@
     ["Working copy", "工作副本"],
     ["Extra", "极高"],
     ["Max", "最高"],
-    ["Select model with Ctrl+M", "使用 Ctrl+M 选择模型"]
+    ["Select model with Ctrl+M", "使用 Ctrl+M 选择模型"],
+    ["For most deep reasoning and complex problems", "适用于大多数深度推理与复杂问题"],
+    ["The original Gemini 4 model for advanced workflows", "面向高级工作流的原始 Gemini 4 模型"]
   ]
 }

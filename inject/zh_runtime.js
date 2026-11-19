@@ -44,6 +44,9 @@
   // 旧版客户端用 [role=article] 标记消息流；2.32.1 的 bundle 已完全没有
   // role=article，改为 data-testid="agent-response" / "user-message"——
   // 两种容器都保留，兼容新旧版本。
+  // 对话导航卡片（conversation-navigator-card）展示的是每条消息的摘录，
+  // 属于用户/智能体写出的内容，与消息正文同理整体跳过（卡片上的
+  // aria-label 仍由属性翻译处理）。
   // 因此内容区整体跳过；耗时时间戳等界面性信息由 processNode 的白名单特例处理。
   // 语音字幕的内容容器也整体跳过：字幕会被拆成逐词/逐行 span（朗读高亮），
   // 每个词都是独立文本节点，不跳过会被词典里的单字词条（the/an/and/All/Ready…）
@@ -52,7 +55,7 @@
   // live-transcript / transcript-line-text / transcript-work-line 与
   // voice-transcript-* 摘要卡片；旧名保留兼容旧版客户端。
   // 这些是用户/智能体说出来的内容，与消息正文同理，不属于界面文案。
-  var SKIP_SEL = "pre, code, textarea, input, script, style, .monaco-editor, [contenteditable], [role=textbox], [role=searchbox], [role=article], [data-testid=\"agent-response\"], [data-testid=\"user-message\"], [data-testid=\"voice-user-message\"], [data-testid=\"voice-agent-message\"], [data-testid=\"voice-chat-marker\"], [data-testid=\"live-user-turn\"], [data-testid=\"live-agent-turn\"], [data-testid=\"live-transcript\"], [data-testid=\"transcript-line-text\"], [data-testid=\"transcript-work-line\"], [data-testid=\"voice-transcript-card\"], [data-testid=\"voice-transcript-summary\"], [data-testid=\"voice-transcript-summary-lead\"], [data-testid=\"voice-transcript-summary-pending\"], [data-testid=\"voice-transcript-summary-point\"]";
+  var SKIP_SEL = "pre, code, textarea, input, script, style, .monaco-editor, [contenteditable], [role=textbox], [role=searchbox], [role=article], [data-testid=\"agent-response\"], [data-testid=\"user-message\"], [data-testid=\"conversation-navigator-card\"], [data-testid=\"voice-user-message\"], [data-testid=\"voice-agent-message\"], [data-testid=\"voice-chat-marker\"], [data-testid=\"live-user-turn\"], [data-testid=\"live-agent-turn\"], [data-testid=\"live-transcript\"], [data-testid=\"transcript-line-text\"], [data-testid=\"transcript-work-line\"], [data-testid=\"voice-transcript-card\"], [data-testid=\"voice-transcript-summary\"], [data-testid=\"voice-transcript-summary-lead\"], [data-testid=\"voice-transcript-summary-pending\"], [data-testid=\"voice-transcript-summary-point\"]";
 
   // ---------- 收集器（scan 模式）----------
   var collector = null;
