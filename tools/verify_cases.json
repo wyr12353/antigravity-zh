@@ -339,6 +339,11 @@
     ["Microphone silent", "麦克风无声"],
     ["Keybinding Scheme", "键位方案"],
     ["VS Code Default", "VS Code 默认"],
-    ["Web (desktop, remote agents, PWA)", "Web（桌面版、远程智能体、PWA）"]
+    ["Web (desktop, remote agents, PWA)", "Web（桌面版、远程智能体、PWA）"],
+    ["Accept Step", "接受步骤"],
+    ["Exit Fullscreen", "退出全屏"],
+    ["Message queued.", "消息已排队。"],
+    ["Search conversations, commands, and code...", "搜索对话、命令和代码…"],
+    ["Working copy", "工作副本"]
   ]
 }
